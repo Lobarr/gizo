@@ -1,11 +1,5 @@
 package p2p
 
-import (
-	"encoding/json"
-
-	"github.com/kpango/glg"
-)
-
 type Version struct {
 	Version int
 	Height  int
@@ -30,21 +24,4 @@ func (v Version) GetHeight() int {
 
 func (v Version) GetBlocks() []string {
 	return v.Blocks
-}
-
-func (v Version) Serialize() []byte {
-	bytes, err := json.Marshal(v)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return bytes
-}
-
-func DeserializeVersion(b []byte) Version {
-	var temp Version
-	err := json.Unmarshal(b, &temp)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
 }

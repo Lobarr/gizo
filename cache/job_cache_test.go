@@ -58,9 +58,9 @@ func TestJobCache(t *testing.T) {
 	j3.AddExec(job.Exec{})
 	j3.AddExec(job.Exec{})
 
-	node1 := merkletree.NewNode(*j1, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j2, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j3, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	node1 := merkletree.NewNode(*j1, nil, nil)
+	node2 := merkletree.NewNode(*j2, nil, nil)
+	node3 := merkletree.NewNode(*j3, nil, nil)
 	tree1 := merkletree.NewMerkleTree([]*merkletree.MerkleNode{node1, node3})
 	tree2 := merkletree.NewMerkleTree([]*merkletree.MerkleNode{node2, node1})
 	tree3 := merkletree.NewMerkleTree([]*merkletree.MerkleNode{node3, node2})

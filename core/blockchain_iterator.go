@@ -59,5 +59,5 @@ func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
 		return nil, err
 	}
 	i.setCurrent(current)
-	return nil, block
+	return block, nil
 }

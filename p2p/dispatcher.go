@@ -92,14 +92,34 @@ func (d Dispatcher) watchWriteQ() {
 func (d Dispatcher) WriteJobs(jobs []job.Job) {
 	nodes := []*merkletree.MerkleNode{}
 	for _, job := range jobs {
-		nodes = append(nodes, merkletree.NewNode(job, &merkletree.MerkleNode{}, &merkletree.MerkleNode{}))
+		node, err := merkletree.NewNode(job, nil, nil)
+		if err != nil {
+			//FIXME: handle errors
+		}
+		nodes = append(nodes, node)
 	}
-	block := core.NewBlock(*merkletree.NewMerkleTree(nodes), d.GetBC().GetLatestBlock().GetHeader().GetHash(), d.GetBC().GetNextHeight(), uint8(difficulty.Difficulty(d.GetBenchmarks(), *d.GetBC())), d.GetPubString())
-	err := d.GetBC().AddBlock(block)
+	tree, err := merkletree.NewMerkleTree(nodes)
+	if err != nil {
+		//FIXME:
+	}
+	latestBlock, err := d.GetBC().GetLatestBlock()
+	if err != nil {
+		//FIXME:
+	}
+	nextHeight, err := d.GetBC().GetNextHeight()
+	if err != nil {
+		//FIXME:
+	}
+	block := core.NewBlock(*tree, latestBlock.GetHeader().GetHash(), nextHeight, uint8(difficulty.Difficulty(d.GetBenchmarks(), *d.GetBC())), d.GetPubString())
+	err = d.GetBC().AddBlock(block)
 	if err != nil {
 		glg.Fatal(err)
 	}
-	d.BroadcastPeers(BlockMessage(block.Serialize(), d.GetPrivByte()))
+	blockBytes, err := helpers.Serialize(block)
+	if err != nil {
+		//FIXME: handle error
+	}
+	d.BroadcastPeers(BlockMessage(blockBytes, d.GetPrivByte()))
 }
 
 //AddJob keeps job in memory before being written to the bc
@@ -130,9 +150,9 @@ func (d Dispatcher) GetWorkerPQ() *WorkerPriorityQueue {
 }
 
 //GetAssignedWorker returns worker assigned to execute job
-func (d Dispatcher) GetAssignedWorker(hash []byte) *melody.Session {
+func (d Dispatcher) GetAssignedWorker(hash string) *melody.Session {
 	for key, val := range d.GetWorkers() {
-		if bytes.Compare(val.GetJob().GetJob().GetHash(), hash) == 0 {
+		if val.GetJob().GetJob().GetHash() == hash {
 			return key
 		}
 	}
@@ -354,12 +374,16 @@ func (d Dispatcher) wPeerTalk() {
 			d.mu.Lock()
 			if m.VerifySignature(d.GetWorker(s).GetPub()) {
 				glg.Info("P2P: received result")
-				exec := job.DeserializeExec(m.GetPayload())
-				d.GetWorker(s).GetJob().SetExec(&exec)
+				var exec *job.Exec
+				err := helpers.Deserialize(m.GetPayload(), exec)
+				if err != nil {
+					//FIXME:
+				}
+				d.GetWorker(s).GetJob().SetExec(exec)
 				d.GetWorker(s).GetJob().ResultsChan() <- *d.GetWorker(s).GetJob()
 				j := d.GetWorker(s).GetJob().GetJob()
 				d.GetWorker(s).SetJob(nil)
-				j.AddExec(exec)
+				j.AddExec(*exec)
 				//TODO: send to requester's message broker
 				d.AddJob(j)
 			} else {
@@ -409,7 +433,8 @@ func (d Dispatcher) dPeerTalk() {
 		case BLOCK:
 			d.mu.Lock()
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub())) {
-				b, err := core.DeserializeBlock(m.GetPayload())
+				var b *core.Block
+				err := helpers.Deserialize(m.GetPayload(), b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -432,8 +457,12 @@ func (d Dispatcher) dPeerTalk() {
 		case BLOCKREQ:
 			d.mu.Lock()
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub())) {
-				blockinfo, _ := d.GetBC().GetBlockInfo(m.GetPayload())
-				s.Write(BlockResMessage(blockinfo.GetBlock().Serialize(), d.GetPrivByte()))
+				blockinfo, _ := d.GetBC().GetBlockInfo(hex.EncodeToString(m.GetPayload()))
+				biBytes, err := helpers.Serialize(blockinfo.GetBlock())
+				if err != nil {
+					//FIXME:
+				}
+				s.Write(BlockResMessage(biBytes, d.GetPrivByte()))
 			}
 			d.mu.Unlock()
 			break
@@ -495,7 +524,8 @@ func (d Dispatcher) handleNodeConnect(conn *websocket.Conn) {
 		case BLOCK:
 			d.mu.Lock()
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub())) {
-				b, err := core.DeserializeBlock(m.GetPayload())
+				var b *core.Block
+				err := helpers.Deserialize(m.GetPayload(), b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -517,7 +547,8 @@ func (d Dispatcher) handleNodeConnect(conn *websocket.Conn) {
 			break
 		case BLOCKRES:
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub())) {
-				b, err := core.DeserializeBlock(m.GetPayload())
+				var b *core.Block
+				err := helpers.Deserialize(m.GetPayload(), b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -578,7 +609,11 @@ func (d Dispatcher) watchInterrupt() {
 
 //Start spins up services
 func (d Dispatcher) Start() {
-	if !d.GetBC().Verify() {
+	verify, err := d.GetBC().Verify()
+	if err != nil {
+		//FIXME: handle
+	}
+	if !verify {
 		glg.Fatal("Dispatcher: blockchain not verified")
 	}
 	go d.deployJobs()
@@ -616,7 +651,19 @@ func (d Dispatcher) Start() {
 		w.Write(statusBytes)
 	})
 	d.router.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
-		w.Write(NewVersion(GizoVersion, int(d.GetBC().GetLatestHeight()), d.GetBC().GetBlockHashesHex()).Serialize())
+		hashes, err := d.GetBC().GetBlockHashesHex()
+		if err != nil {
+			//FIXME:
+		}
+		height, err := d.GetBC().GetLatestHeight()
+		if err != nil {
+			//FIXME:
+		}
+		versionBytes, err := helpers.Serialize(NewVersion(GizoVersion, height, hashes))
+		if err != nil {
+			//FIXME:
+		}
+		w.Write(versionBytes)
 	})
 
 	err = d.discover.Forward(uint16(d.GetPort()), "gizo dispatcher node")
@@ -705,7 +752,10 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	}
 	if syncVersion.GetHeight() != 0 {
 		glg.Warn("Dispatcher: node sync in progress")
-		blocks := d.GetBC().GetBlockHashesHex()
+		blocks, err := d.GetBC().GetBlockHashesHex()
+		if err != nil {
+			//FIXME:
+		}
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
 				hashBytes, err := hex.DecodeString(hash)
@@ -755,7 +805,11 @@ func NewDispatcher(port int) *Dispatcher {
 			b := tx.Bucket([]byte(NodeBucket))
 			priv = b.Get([]byte("priv"))
 			pub = b.Get([]byte("pub"))
-			bench = benchmark.DeserializeBenchmarkEngine(b.Get([]byte("benchmark")))
+			var bench *benchmark.Engine
+			err := helpers.Deserialize(b.Get([]byte("benchmark")), bench)
+			if err != nil {
+				//FIXME:
+			}
 			//!FIXME: check if token is defined
 			token = string(b.Get([]byte("token")))
 			return nil
@@ -793,7 +847,15 @@ func NewDispatcher(port int) *Dispatcher {
 		}
 	}
 
-	priv, pub = crypt.GenKeys()
+	_priv, _pub := crypt.GenKeys()
+	priv, err = hex.DecodeString(_priv)
+	if err != nil {
+		glg.Fatal(err)
+	}
+	pub, err = hex.DecodeString(_pub)
+	if err != nil {
+		glg.Fatal(err)
+	}
 	bench = benchmark.NewEngine()
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	if err != nil {
@@ -806,7 +868,11 @@ func NewDispatcher(port int) *Dispatcher {
 			glg.Fatal(err)
 		}
 
-		if err = b.Put([]byte("benchmark"), bench.Serialize()); err != nil {
+		benchBytes, err := helpers.Serialize(bench)
+		if err != nil {
+			//FIXME:
+		}
+		if err = b.Put([]byte("benchmark"), benchBytes); err != nil {
 			glg.Fatal(err)
 		}
 
@@ -814,7 +880,7 @@ func NewDispatcher(port int) *Dispatcher {
 			glg.Fatal(err)
 		}
 
-		if err = b.Put([]byte("pub"), pub); err != nil {
+		if err = b.Put([]byte("pub"), priv); err != nil {
 			glg.Fatal(err)
 		}
 		return nil

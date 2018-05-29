@@ -36,7 +36,7 @@ func (pq JobPriorityQueue) Pop() qItem.Item {
 	return i.(qItem.Item)
 }
 
-func (pq JobPriorityQueue) Remove(hash []byte) {
+func (pq JobPriorityQueue) Remove(hash string) {
 	pq.pq.RemoveHash(hash)
 }
 

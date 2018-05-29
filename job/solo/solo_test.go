@@ -31,7 +31,7 @@ func TestSolo(t *testing.T) {
 	envs := job.NewEnvVariables(*job.NewEnv("Env", "Anko"), *job.NewEnv("By", "Lobarr"))
 	exec1, err := job.NewExec([]interface{}{2}, 5, job.NORMAL, 0, 0, 0, 0, hex.EncodeToString(pub), envs, "test")
 	assert.NoError(t, err)
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	node1 := merkletree.NewNode(*j, nil, nil)
 	nodes := []*merkletree.MerkleNode{node1}
 	tree := merkletree.NewMerkleTree(nodes)
 	bc := core.CreateBlockChain("test")

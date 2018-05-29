@@ -40,8 +40,8 @@ func TestBatch(t *testing.T) {
 	assert.NoError(t, err)
 	exec4, err := job.NewExec([]interface{}{}, 5, job.NORMAL, 0, 0, 0, 0, "", envs, "test")
 	assert.NoError(t, err)
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j2, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	node1 := merkletree.NewNode(*j, nil, nil)
+	node2 := merkletree.NewNode(*j2, nil, nil)
 	nodes := []*merkletree.MerkleNode{node1, node2}
 	tree := merkletree.NewMerkleTree(nodes)
 	bc := core.CreateBlockChain("test")

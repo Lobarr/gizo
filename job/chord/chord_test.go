@@ -50,9 +50,9 @@ func TestChord(t *testing.T) {
 	exec5, err := job.NewExec([]interface{}{}, 5, job.LOW, 0, 0, 0, 0, "", envs, "test")
 	assert.NoError(t, err)
 
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j2, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*callback, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	node1 := merkletree.NewNode(*j, nil, nil)
+	node2 := merkletree.NewNode(*j2, nil, nil)
+	node3 := merkletree.NewNode(*callback, nil, nil)
 
 	nodes := []*merkletree.MerkleNode{node1, node2, node3}
 	tree := merkletree.NewMerkleTree(nodes)

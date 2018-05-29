@@ -4,6 +4,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/kpango/glg"
+
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/allegro/bigcache"
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
@@ -19,8 +23,9 @@ var (
 
 //JobCache holds most likely to be executed jobs
 type JobCache struct {
-	cache *bigcache.BigCache
-	bc    *core.BlockChain
+	cache  *bigcache.BigCache
+	bc     *core.BlockChain
+	logger *glg.Glg
 }
 
 func (c JobCache) getCache() *bigcache.BigCache {
@@ -71,7 +76,8 @@ func (c JobCache) Get(key string) (*job.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	j, err := job.DeserializeJob(jBytes)
+	var j *job.Job
+	err = helpers.Deserialize(jBytes, j)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +87,10 @@ func (c JobCache) Get(key string) (*job.Job, error) {
 //fills up the cache with jobs with most execs in the last 15 blocks
 func (c JobCache) fill() {
 	var jobs []job.Job
-	blks := c.getBC().GetLatest15()
+	blks, err := c.getBC().GetLatest15()
+	if err != nil {
+		c.logger.Fatal(err)
+	}
 	if len(blks) != 0 {
 		for _, blk := range blks {
 			for _, job := range blk.GetNodes() {
@@ -91,11 +100,19 @@ func (c JobCache) fill() {
 		sorted := job.UniqJob(mergeSort(jobs))
 		if len(sorted) > MaxCacheLen {
 			for i := 0; i <= MaxCacheLen; i++ {
-				c.Set(sorted[i].GetID(), sorted[i].Serialize())
+				jobBytes, err := helpers.Serialize(sorted[i])
+				if err != nil {
+					c.logger.Fatal(err)
+				}
+				c.Set(sorted[i].GetID(), jobBytes)
 			}
 		} else {
 			for _, job := range sorted {
-				c.Set(job.GetID(), job.Serialize())
+				jobBytes, err := helpers.Serialize(job)
+				if err != nil {
+					c.logger.Fatal(err)
+				}
+				c.Set(job.GetID(), jobBytes)
 			}
 		}
 	}
@@ -104,7 +121,7 @@ func (c JobCache) fill() {
 //NewJobCache return s initialized job cache
 func NewJobCache(bc *core.BlockChain) *JobCache {
 	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
-	jc := JobCache{c, bc}
+	jc := JobCache{c, bc, helpers.Logger()}
 	jc.fill()
 	go jc.watch()
 	return &jc
@@ -113,7 +130,7 @@ func NewJobCache(bc *core.BlockChain) *JobCache {
 // creates a new jobcache without updating every minute
 func NewJobCacheNoWatch(bc *core.BlockChain) *JobCache {
 	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
-	jc := JobCache{c, bc}
+	jc := JobCache{c, bc, helpers.Logger()}
 	jc.fill()
 	return &jc
 }

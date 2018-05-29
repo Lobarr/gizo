@@ -35,7 +35,11 @@ func (n *MerkleNode) setHash() error {
 		return err
 	}
 
-	headers := bytes.Join([][]byte{l, r, n.Job.Serialize()}, []byte{})
+	jobBytes, err := helpers.Serialize(n.Job)
+	if err != nil {
+		return err
+	}
+	headers := bytes.Join([][]byte{l, r, jobBytes}, []byte{})
 	if err != nil {
 		return err
 	}
@@ -113,9 +117,9 @@ func NewNode(j job.Job, lNode, rNode *MerkleNode) (*MerkleNode, error) {
 func MergeJobs(x, y MerkleNode) job.Job {
 	return job.Job{
 		ID:        x.GetJob().GetID() + y.GetJob().GetID(),
-		Hash:      append(x.GetJob().GetHash(), y.GetJob().GetHash()...),
+		Hash:      x.GetJob().GetHash() + y.GetJob().GetHash(),
 		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),
 		Task:      x.GetJob().GetTask() + y.GetJob().GetTask(),
-		Signature: append(x.GetJob().GetSignature(), y.GetJob().GetSignature()...),
+		Signature: x.GetJob().GetSignature() + y.GetJob().GetSignature(),
 	}
 }

@@ -3,6 +3,7 @@ package job
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -15,7 +16,7 @@ import (
 
 //TODO: add environment variables
 type Exec struct {
-	Hash          []byte
+	Hash          string
 	Timestamp     int64
 	Duration      time.Duration //saved in nanoseconds
 	Args          []interface{} // parameters
@@ -180,7 +181,7 @@ func (e *Exec) SetArgs(a []interface{}) {
 	e.Args = a
 }
 
-func (e Exec) GetHash() []byte {
+func (e Exec) GetHash() string {
 	return e.Hash
 }
 
@@ -206,7 +207,7 @@ func (e *Exec) setHash() {
 	)
 
 	hash := sha256.Sum256(header)
-	e.Hash = hash[:]
+	e.Hash = hex.EncodeToString(hash[:])
 }
 
 func (e Exec) GetTimestamp() int64 {
@@ -253,33 +254,15 @@ func (e Exec) getPub() string {
 	return e.Pub
 }
 
-func (e Exec) Serialize() []byte {
-	temp, err := json.Marshal(e)
-	if err != nil {
-		glg.Error(err)
-	}
-	return temp
-}
-
-func DeserializeExec(b []byte) Exec {
-	var temp Exec
-	err := json.Unmarshal(b, &temp)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	temp.cancel = make(chan struct{})
-	return temp
-}
-
 //UniqExec returns unique values of parameter
 func UniqExec(execs []Exec) []Exec {
 	temp := []Exec{}
 	seen := make(map[string]bool)
 	for _, exec := range execs {
-		if _, ok := seen[string(exec.Serialize())]; ok {
+		if _, ok := seen[exec.GetHash()]; ok {
 			continue
 		}
-		seen[string(exec.Serialize())] = true
+		seen[string(exec.GetHash())] = true
 		temp = append(temp, exec)
 	}
 	return temp

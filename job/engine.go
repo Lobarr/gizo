@@ -30,12 +30,12 @@ var (
 
 type Job struct {
 	ID             string
-	Hash           []byte
+	Hash           string
 	Execs          []Exec
 	Name           string
 	Task           string
-	Signature      [][]byte // signature of owner
-	SubmissionTime time.Time
+	Signature      string // signature of owner
+	SubmissionTime int64
 	Private        bool //private job flag (default to false - public)
 }
 
@@ -53,45 +53,56 @@ func UniqJob(jobs []Job) []Job {
 	return temp
 }
 
-func (j *Job) Sign(priv []byte) {
+func (j *Job) Sign(priv string) error {
 	hash := sha256.Sum256([]byte(j.GetTask()))
-	privateKey, _ := x509.ParseECPrivateKey(priv)
+	privBytes, err := hex.DecodeString(priv)
+	if err != nil {
+		return err
+	}
+	privateKey, _ := x509.ParseECPrivateKey(privBytes)
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
 	if err != nil {
 		glg.Fatal("Job: unable to sign job")
 	}
-	var temp [][]byte
-	temp = append(temp, r.Bytes(), s.Bytes())
-	j.setSignature(temp)
+	j.setSignature(hex.EncodeToString(r.Bytes()) + hex.EncodeToString(s.Bytes()))
+	return nil
 }
 
-func (j Job) VerifySignature(pub string) bool {
+func (j Job) VerifySignature(pub string) (bool, error) {
 	pubBytes, err := hex.DecodeString(pub)
 	if err != nil {
 		glg.Fatal(err)
 	}
 
+	rBytes, err := hex.DecodeString(j.GetSignature()[:len(j.GetSignature())/2])
+	if err != nil {
+		return false, err
+	}
+	sBytes, err := hex.DecodeString(j.GetSignature()[len(j.GetSignature())/2:])
+	if err != nil {
+		return false, err
+	}
 	var r big.Int
 	var s big.Int
-	r.SetBytes(j.GetSignature()[0])
-	s.SetBytes(j.GetSignature()[1])
+	r.SetBytes(rBytes)
+	s.SetBytes(sBytes)
 
 	publicKey, _ := x509.ParsePKIXPublicKey(pubBytes)
 	hash := sha256.Sum256([]byte(j.GetTask()))
 	switch pubConv := publicKey.(type) {
 	case *ecdsa.PublicKey:
-		return ecdsa.Verify(pubConv, hash[:], &r, &s)
+		return ecdsa.Verify(pubConv, hash[:], &r, &s), nil
 	default:
-		return false
+		return false, nil
 	}
 }
 
-func (j Job) GetSubmissionTime() time.Time {
+func (j Job) GetSubmissionTime() int64 {
 	return j.SubmissionTime
 }
 
 func (j *Job) setSubmissionTime(t time.Time) {
-	j.SubmissionTime = t
+	j.SubmissionTime = t.Unix()
 }
 
 func (j Job) IsEmpty() bool {
@@ -100,18 +111,17 @@ func (j Job) IsEmpty() bool {
 
 func NewJob(task string, name string, priv bool, privKey string) (*Job, error) {
 	j := &Job{
-		SubmissionTime: time.Now(),
+		SubmissionTime: time.Now().Unix(),
 		ID:             uuid.NewV4().String(),
 		Execs:          []Exec{},
 		Name:           name,
 		Task:           helpers.Encode64([]byte(task)),
 		Private:        priv,
 	}
-	privBytes, err := hex.DecodeString(privKey)
+	err := j.Sign(privKey)
 	if err != nil {
 		return nil, err
 	}
-	j.Sign(privBytes)
 	j.setHash()
 	return j, nil
 }
@@ -136,43 +146,60 @@ func (j Job) GetID() string {
 	return j.ID
 }
 
-func (j Job) GetHash() []byte {
+func (j Job) GetHash() string {
 	return j.Hash
 }
 
-func (j *Job) setHash() {
+func (j *Job) setHash() error {
+	rBytes, err := hex.DecodeString(j.GetSignature()[:len(j.GetSignature())/2])
+	if err != nil {
+		return err
+	}
+	sBytes, err := hex.DecodeString(j.GetSignature()[len(j.GetSignature())/2:])
+	if err != nil {
+		return err
+	}
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(j.GetID()),
 			[]byte(j.GetTask()),
 			[]byte(j.GetName()),
-			j.GetSignature()[0],
-			j.GetSignature()[1],
-			[]byte(string(j.GetSubmissionTime().Unix())),
+			rBytes,
+			sBytes,
+			[]byte(string(j.GetSubmissionTime())),
 			[]byte(strconv.FormatBool(j.GetPrivate())),
 		},
 		[]byte{},
 	)
 	hash := sha256.Sum256(headers)
-	j.Hash = hash[:]
+	j.Hash = hex.EncodeToString(hash[:])
+	return nil
 }
 
 //Verify checks if the job has been modified
-func (j Job) Verify() bool {
+func (j Job) Verify() (bool, error) {
+	rBytes, err := hex.DecodeString(j.GetSignature()[:len(j.GetSignature())/2])
+	if err != nil {
+		return false, err
+	}
+	sBytes, err := hex.DecodeString(j.GetSignature()[len(j.GetSignature())/2:])
+	if err != nil {
+		return false, err
+	}
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(j.GetID()),
 			[]byte(j.GetTask()),
 			[]byte(j.GetName()),
-			j.GetSignature()[0],
-			j.GetSignature()[1],
-			[]byte(string(j.GetSubmissionTime().Unix())),
+			rBytes,
+			sBytes,
+			[]byte(string(j.GetSubmissionTime())),
 			[]byte(strconv.FormatBool(j.GetPrivate())),
 		},
 		[]byte{},
 	)
 	hash := sha256.Sum256(headers)
-	return bytes.Compare(j.GetHash(), hash[:]) == 0
+	return j.GetHash() == hex.EncodeToString(hash[:]), nil
 }
 
 //return json bytes of the execs
@@ -184,12 +211,9 @@ func (j Job) serializeExecs() []byte {
 	return temp
 }
 
-func (j Job) GetExec(hash []byte) (*Exec, error) {
-	glg.Info("Job: Getting exec - " + hex.EncodeToString(hash))
-	var check int
+func (j Job) GetExec(hash string) (*Exec, error) {
 	for _, exec := range j.GetExecs() {
-		check = bytes.Compare(exec.GetHash(), hash)
-		if check == 0 {
+		if exec.GetHash() == hash {
 			return &exec, nil
 		}
 	}
@@ -204,39 +228,21 @@ func (j Job) GetExecs() []Exec {
 	return j.Execs
 }
 
-func (j Job) GetSignature() [][]byte {
+func (j Job) GetSignature() string {
 	return j.Signature
 }
 
-func (j *Job) setSignature(sign [][]byte) {
+func (j *Job) setSignature(sign string) {
 	j.Signature = sign
 }
 
 func (j *Job) AddExec(je Exec) {
-	glg.Info("Job: Adding exec - " + hex.EncodeToString(je.GetHash()) + " to job - " + j.GetID())
 	j.Execs = append(j.Execs, je)
 	j.setHash() //regenerates hash
 }
 
 func (j Job) GetTask() string {
 	return j.Task
-}
-
-func (j *Job) Serialize() []byte {
-	temp, err := json.Marshal(*j)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
-}
-
-func DeserializeJob(b []byte) (*Job, error) {
-	var temp Job
-	err := json.Unmarshal(b, &temp)
-	if err != nil {
-		return nil, err
-	}
-	return &temp, nil
 }
 
 //used to stringify arguments
@@ -284,7 +290,11 @@ func argsStringified(args []interface{}) string {
 func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 	//TODO: kill goroutines running within this function when it exits
 	if j.GetPrivate() == true {
-		if j.VerifySignature(exec.getPub()) == false {
+		verify, err := j.VerifySignature(exec.getPub())
+		if err != nil {
+			exec.SetErr(err)
+		}
+		if verify == false {
 			exec.SetErr(ErrUnverifiedSignature)
 			return exec
 		}

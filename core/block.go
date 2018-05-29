@@ -73,8 +73,11 @@ func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficult
 		By:     by,
 	}
 	pow := NewPOW(block)
-	pow.run() //! mines block
-	err := block.Export()
+	err := pow.run() //! mines block
+	if err != nil {
+		glg.Fatal(err)
+	}
+	err = block.Export()
 	if err != nil {
 		glg.Fatal(err)
 	}
@@ -146,7 +149,7 @@ func (b *Block) IsEmpty() bool {
 }
 
 //VerifyBlock verifies a block
-func (b *Block) VerifyBlock() bool {
+func (b *Block) VerifyBlock() (bool, error) {
 	glg.Info("Core: Verifying block - " + b.GetHeader().GetHash())
 	pow := NewPOW(b)
 	return pow.Validate()

@@ -12,8 +12,8 @@ import (
 func TestMerge(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := NewNode(*j, &MerkleNode{}, &MerkleNode{})
-	node2 := NewNode(*j, &MerkleNode{}, &MerkleNode{})
+	node1 := NewNode(*j, nil, nil)
+	node2 := NewNode(*j, nil, nil)
 
 	parent := merge(*node1, *node2)
 	assert.NotNil(t, parent)

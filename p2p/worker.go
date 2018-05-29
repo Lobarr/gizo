@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
 	"github.com/gizo-network/gizo/job/queue/qItem"
@@ -134,7 +136,11 @@ func (w *Worker) Start() {
 				w.SetItem(qItem.DeserializeItem(m.GetPayload()))
 				exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
 				w.item.SetExec(exec)
-				w.conn.WriteMessage(websocket.BinaryMessage, ResultMessage(w.item.GetExec().Serialize(), w.GetPrivByte()))
+				resultBytes, err := helpers.Serialize(w.item.GetExec())
+				if err != nil {
+					//FIXME: handle error
+				}
+				w.conn.WriteMessage(websocket.BinaryMessage, ResultMessage(resultBytes, w.GetPrivByte()))
 			} else {
 				w.conn.WriteMessage(websocket.BinaryMessage, InvalidSignature())
 				w.Disconnect()
@@ -267,7 +273,15 @@ func NewWorker() *Worker {
 	// 	shortlist: shortlist.([]string),
 	// }
 	// }
-	priv, pub = crypt.GenKeys()
+	_priv, _pub := crypt.GenKeys()
+	priv, err := hex.DecodeString(_priv)
+	if err != nil {
+		glg.Fatal(err)
+	}
+	pub, err = hex.DecodeString(_pub)
+	if err != nil {
+		glg.Fatal(err)
+	}
 	// db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	// if err != nil {
 	// 	glg.Fatal(err)

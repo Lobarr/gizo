@@ -5,12 +5,13 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/hex"
 
 	"github.com/kpango/glg"
 )
 
 //GenKeys returns private and public keys
-func GenKeys() (private []byte, public []byte) {
+func GenKeys() (private string, public string) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
 	if err != nil {
 		glg.Fatal(err)
@@ -23,5 +24,5 @@ func GenKeys() (private []byte, public []byte) {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	return privKeyBytes, pubKeyBytes
+	return hex.EncodeToString(privKeyBytes), hex.EncodeToString(pubKeyBytes)
 }

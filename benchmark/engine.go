@@ -1,7 +1,6 @@
 package benchmark
 
 import (
-	"encoding/hex"
 	"math/rand"
 	"sync"
 	"time"
@@ -46,26 +45,20 @@ func (b Engine) GetData() []Benchmark {
 func (b Engine) block(difficulty uint8) *core.Block {
 	//random data
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node9 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node10 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node11 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node12 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node13 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node14 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node15 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node16 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-
-	tree := merkletree.NewMerkleTree([]*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8, node9, node10, node11, node12, node13, node14, node15, node16})
-	return core.NewBlock(*tree, []byte("TestingPreviousHash"), uint64(rand.Int()), difficulty, "benchmark-engine")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			glg.Fatal(err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, err := merkletree.NewMerkleTree(nodes)
+	if err != nil {
+		glg.Fatal(err)
+	}
+	return core.NewBlock(*tree, "47656e65736973", uint64(rand.Int()), difficulty, "benchmark-engine")
 }
 
 // Run executes the benchmark engine

@@ -108,6 +108,9 @@ func (bc *BlockChain) GetBlocksWithinMinute() ([]Block, error) {
 	bci := bc.iterator()
 	for {
 		block, err := bci.Next()
+		if err != nil {
+			return []Block{}, err
+		}
 		if block.GetHeight() == 0 && block.GetHeader().GetTimestamp() > now.BeginningOfMinute().Unix() {
 			blocks = append(blocks, *block)
 			break
@@ -124,7 +127,10 @@ func (bc *BlockChain) GetBlocksWithinMinute() ([]Block, error) {
 func (bc *BlockChain) GetBlockByHeight(height int) (*Block, error) {
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
+		if err != nil {
+			return nil, err
+		}
 		if height != 0 && block.GetHeight() == 0 {
 			return nil, ErrBlockNotFound
 		} else if int(block.GetHeight()) == height {
@@ -134,12 +140,15 @@ func (bc *BlockChain) GetBlockByHeight(height int) (*Block, error) {
 }
 
 //GetLatest15 retuns the latest 15 blocks
-func (bc *BlockChain) GetLatest15() []Block {
+func (bc *BlockChain) GetLatest15() ([]Block, error) {
 	var blocks []Block
 	bci := bc.iterator()
 	for {
 		if len(blocks) <= 15 {
-			block := bci.Next()
+			block, err := bci.Next()
+			if err != nil {
+				return []Block{}, err
+			}
 			if block.GetHeight() == 0 {
 				blocks = append(blocks, *block)
 				break
@@ -150,7 +159,7 @@ func (bc *BlockChain) GetLatest15() []Block {
 			break
 		}
 	}
-	return blocks
+	return blocks, nil
 }
 
 //GetLatestHeight returns the height of the latest block to the blockchain
@@ -194,10 +203,14 @@ func (bc BlockChain) GetNextHeight() (uint64, error) {
 
 //AddBlock adds block to the blockchain
 func (bc *BlockChain) AddBlock(block *Block) error {
-	if block.VerifyBlock() == false {
+	verify, err := block.VerifyBlock()
+	if err != nil {
+		return err
+	}
+	if verify == false {
 		return ErrUnverifiedBlock
 	}
-	err := bc.getDB().Update(func(tx *bolt.Tx) error {
+	err = bc.getDB().Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		hashBytes, err := hex.DecodeString(block.GetHeader().GetHash())
 		if err != nil {
@@ -260,7 +273,10 @@ func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
+		if err != nil {
+			return nil, err
+		}
 		if block.GetHeight() == 0 {
 			return nil, ErrJobNotFound
 		}
@@ -279,13 +295,16 @@ func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
 }
 
 //FindExec finds exec in the bc
-func (bc *BlockChain) FindExec(id string, hash []byte) (*job.Exec, error) {
+func (bc *BlockChain) FindExec(id string, hash string) (*job.Exec, error) {
 	//FIXME: speed up
 	glg.Info("Core: Finding Job in the blockchain - " + id)
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
+		if err != nil {
+			return nil, err
+		}
 		if block.GetHeight() == 0 {
 			return nil, job.ErrExecNotFound
 		}
@@ -303,16 +322,19 @@ func (bc *BlockChain) FindExec(id string, hash []byte) (*job.Exec, error) {
 }
 
 //GetJobExecs returns all execs of a job
-func (bc *BlockChain) GetJobExecs(id string) []job.Exec {
+func (bc *BlockChain) GetJobExecs(id string) ([]job.Exec, error) {
 	//FIXME: speed up
 	glg.Info("Core: Finding Job in the blockchain - " + id)
 	execs := []job.Exec{}
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
+		if err != nil {
+			return []job.Exec{}, err
+		}
 		if block.GetHeight() == 0 {
-			return job.UniqExec(execs)
+			return job.UniqExec(execs), nil
 		}
 		tree.SetLeafNodes(block.GetNodes())
 		found, err := tree.SearchJob(id)
@@ -329,7 +351,10 @@ func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
+		if err != nil {
+			return nil, err
+		}
 		if block.GetHeight() == 0 {
 			return nil, ErrJobNotFound
 		}
@@ -343,46 +368,59 @@ func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
 }
 
 //Verify verifies the blockchain
-func (bc *BlockChain) Verify() bool {
+func (bc *BlockChain) Verify() (bool, error) {
 	glg.Info("Core: Verifying Blockchain")
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
-		if block.GetHeight() == 0 {
-			return true
+		block, err := bci.Next()
+		if err != nil {
+			return false, err
 		}
-		if block.VerifyBlock() == false {
-			return false
+		if block.GetHeight() == 0 {
+			return true, nil
+		}
+		verify, err := block.VerifyBlock()
+		if err != nil {
+			return false, err
+		}
+		if verify == false {
+			return false, nil
 		}
 	}
 }
 
 //GetBlockHashes returns all the hashes of all the blocks in the current bc
-func (bc *BlockChain) GetBlockHashes() []string {
+func (bc *BlockChain) GetBlockHashes() ([]string, error) {
 	var hashes []string
 	bci := bc.iterator()
 	for {
-		block := bci.NextBlockinfo()
+		block, err := bci.NextBlockinfo()
+		if err != nil {
+			return []string{}, err
+		}
 		hashes = append(hashes, block.GetHeader().GetHash())
 		if block.GetHeight() == 0 {
 			break
 		}
 	}
-	return hashes
+	return hashes, nil
 }
 
 //GetBlockHashesHex returns hashes (hex) of all the blocks in the bc
-func (bc *BlockChain) GetBlockHashesHex() []string {
+func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 	var hashes []string
 	bci := bc.iterator()
 	for {
-		block := bci.NextBlockinfo()
+		block, err := bci.NextBlockinfo()
+		if err != nil {
+			return []string{}, nil
+		}
 		hashes = append(hashes, block.GetHeader().GetHash())
 		if block.GetHeight() == 0 {
 			break
 		}
 	}
-	return funk.Reverse(hashes).([]string)
+	return funk.ReverseStrings(hashes), nil
 }
 
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain

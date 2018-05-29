@@ -22,7 +22,7 @@ func TestBuild(t *testing.T) {
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
 	nodes_8 := []*merkletree.MerkleNode{}
 	for i := 0; i < 8; i++ {
-		nodes_8 = append(nodes_8, merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{}))
+		nodes_8 = append(nodes_8, merkletree.NewNode(*j, nil, nil))
 	}
 
 	tree := merkletree.MerkleTree{LeafNodes: nodes_8}
@@ -33,7 +33,7 @@ func TestBuild(t *testing.T) {
 
 	nodes_max := []*merkletree.MerkleNode{}
 	for i := 0; i < merkletree.MaxTreeJobs+1; i++ {
-		nodes_max = append(nodes_8, merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{}))
+		nodes_max = append(nodes_8, merkletree.NewNode(*j, nil, nil))
 	}
 	tree2 := merkletree.MerkleTree{LeafNodes: nodes_max}
 	// assert.Error(t, tree2.Build())
@@ -44,15 +44,14 @@ func TestBuild(t *testing.T) {
 func TestNewMerkleTree(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8}
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
 
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	assert.NotNil(t, tree.GetRoot())
@@ -62,15 +61,14 @@ func TestNewMerkleTree(t *testing.T) {
 func TestVerifyTree(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8}
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
 
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	assert.True(t, tree.VerifyTree())
@@ -82,15 +80,14 @@ func TestVerifyTree(t *testing.T) {
 func TestSearchNode(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8}
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
 
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	f, err := tree.SearchNode(node5.GetHash())
@@ -101,15 +98,14 @@ func TestSearchNode(t *testing.T) {
 func TestSearchJob(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8}
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
 
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	f, err := tree.SearchJob(j.GetID())
