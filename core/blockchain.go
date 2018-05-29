@@ -30,9 +30,10 @@ var (
 
 //BlockChain - singly linked list of blocks
 type BlockChain struct {
-	tip []byte //! hash of latest block in the blockchain
-	db  *bolt.DB
-	mu  *sync.RWMutex
+	tip    []byte //! hash of latest block in the blockchain
+	db     *bolt.DB
+	mu     *sync.RWMutex
+	logger *glg.Glg
 }
 
 //returns the blockinfo of the latest block in the blockchain
@@ -64,12 +65,15 @@ func (bc *BlockChain) setDB(db *bolt.DB) {
 }
 
 //GetBlockInfo returns the blockinfo of a particular block from the db
-func (bc *BlockChain) GetBlockInfo(hash []byte) (*BlockInfo, error) {
-	glg.Info("Core: Getting blockinfo - " + hex.EncodeToString(hash))
+func (bc *BlockChain) GetBlockInfo(hash string) (*BlockInfo, error) {
 	var blockinfo *BlockInfo
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
-		blockinfoBytes := b.Get(hash)
+		hashBytes, err := hex.DecodeString(hash)
+		if err != nil {
+			return err
+		}
+		blockinfoBytes := b.Get(hashBytes)
 		if blockinfoBytes != nil {
 			blockinfo = DeserializeBlockInfo(blockinfoBytes)
 		} else {
@@ -78,7 +82,7 @@ func (bc *BlockChain) GetBlockInfo(hash []byte) (*BlockInfo, error) {
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err) //! handle db failure error
+		return nil, err //! handle db failure error
 	}
 	if blockinfo != nil {
 		return blockinfo, nil
@@ -87,18 +91,23 @@ func (bc *BlockChain) GetBlockInfo(hash []byte) (*BlockInfo, error) {
 }
 
 //GetPrevHash returns the hash of the last block in the bc
-func (bc BlockChain) GetPrevHash() []byte {
-	return bc.GetLatestBlock().GetHeader().GetHash()
+func (bc BlockChain) GetPrevHash() (string, error) {
+	b, err := bc.GetLatestBlock()
+	if err != nil {
+		return "", err
+	}
+
+	return b.GetHeader().GetHash(), nil
 }
 
 //GetBlocksWithinMinute returns all blocks in the db within the last minute
-func (bc *BlockChain) GetBlocksWithinMinute() []Block {
-	glg.Info("Core: Getting blocks within last minute")
+func (bc *BlockChain) GetBlocksWithinMinute() ([]Block, error) {
 	var blocks []Block
+	var err error
 	now := now.New(time.Now())
 	bci := bc.iterator()
 	for {
-		block := bci.Next()
+		block, err := bci.Next()
 		if block.GetHeight() == 0 && block.GetHeader().GetTimestamp() > now.BeginningOfMinute().Unix() {
 			blocks = append(blocks, *block)
 			break
@@ -108,7 +117,7 @@ func (bc *BlockChain) GetBlocksWithinMinute() []Block {
 			break
 		}
 	}
-	return blocks
+	return blocks, err
 }
 
 //GetBlockByHeight return block by height
@@ -126,7 +135,6 @@ func (bc *BlockChain) GetBlockByHeight(height int) (*Block, error) {
 
 //GetLatest15 retuns the latest 15 blocks
 func (bc *BlockChain) GetLatest15() []Block {
-	glg.Info("Core: Getting last 15 blocks")
 	var blocks []Block
 	bci := bc.iterator()
 	for {
@@ -146,8 +154,7 @@ func (bc *BlockChain) GetLatest15() []Block {
 }
 
 //GetLatestHeight returns the height of the latest block to the blockchain
-func (bc *BlockChain) GetLatestHeight() uint64 {
-	glg.Info("Core: Getting latest block height")
+func (bc *BlockChain) GetLatestHeight() (int, error) {
 	var lastBlock *BlockInfo
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
@@ -156,14 +163,13 @@ func (bc *BlockChain) GetLatestHeight() uint64 {
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err)
+		return 0, err
 	}
-	return lastBlock.GetHeight()
+	return int(lastBlock.GetHeight()), nil
 }
 
 //GetLatestBlock returns the tip as a block
-func (bc *BlockChain) GetLatestBlock() *Block {
-	glg.Info("Core: Getting latest block")
+func (bc *BlockChain) GetLatestBlock() (*Block, error) {
 	var lastBlock *BlockInfo
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
@@ -172,25 +178,32 @@ func (bc *BlockChain) GetLatestBlock() *Block {
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
-	return lastBlock.GetBlock()
+	return lastBlock.GetBlock(), nil
 }
 
 //GetNextHeight returns the next height in the blockchain
-func (bc BlockChain) GetNextHeight() uint64 {
-	return bc.GetLatestBlock().GetHeight() + 1
+func (bc BlockChain) GetNextHeight() (uint64, error) {
+	b, err := bc.GetLatestBlock()
+	if err != nil {
+		return 0, err
+	}
+	return b.GetHeight() + 1, err
 }
 
 //AddBlock adds block to the blockchain
 func (bc *BlockChain) AddBlock(block *Block) error {
-	glg.Info("Core: Adding block to the blockchain - " + hex.EncodeToString(block.GetHeader().GetHash()))
 	if block.VerifyBlock() == false {
 		return ErrUnverifiedBlock
 	}
 	err := bc.getDB().Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
-		inDb := b.Get(block.Header.GetHash())
+		hashBytes, err := hex.DecodeString(block.GetHeader().GetHash())
+		if err != nil {
+			return err
+		}
+		inDb := b.Get(hashBytes)
 		if inDb != nil {
 			glg.Warn("Block exists in blockchain")
 			return nil
@@ -203,21 +216,26 @@ func (bc *BlockChain) AddBlock(block *Block) error {
 			FileName:  block.fileStats().Name(),
 			FileSize:  block.fileStats().Size(),
 		}
-
-		if err := b.Put(block.GetHeader().GetHash(), blockinfo.Serialize()); err != nil {
-			glg.Fatal(err)
-		}
-
-		//FIXME: handle a fork
-		latest, err := bc.GetBlockInfo(bc.getTip())
+		biBytes, err := helpers.Serialize(blockinfo)
 		if err != nil {
-			glg.Fatal(err)
+			return err
 		}
+		err = b.Put(hashBytes, biBytes)
+		if err != nil {
+			return err
+		}
+
+		latest, err := bc.GetBlockInfo(hex.EncodeToString(bc.getTip()))
+		if err != nil {
+			return err
+		}
+
 		if block.GetHeight() > latest.GetHeight() {
-			if err := b.Put([]byte("l"), block.GetHeader().GetHash()); err != nil {
+
+			if err := b.Put([]byte("l"), hashBytes); err != nil {
 				glg.Fatal(err)
 			}
-			bc.setTip(block.GetHeader().GetHash())
+			bc.setTip(hashBytes)
 		}
 		return nil
 	})
@@ -306,9 +324,8 @@ func (bc *BlockChain) GetJobExecs(id string) []job.Exec {
 }
 
 //FindMerkleNode returns the merklenode from the blockchain
-func (bc *BlockChain) FindMerkleNode(h []byte) (*merkletree.MerkleNode, error) {
+func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
 	//FIXME: speed up
-	glg.Info("Core: Finding merklenode - " + hex.EncodeToString(h))
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
@@ -341,8 +358,8 @@ func (bc *BlockChain) Verify() bool {
 }
 
 //GetBlockHashes returns all the hashes of all the blocks in the current bc
-func (bc *BlockChain) GetBlockHashes() [][]byte {
-	var hashes [][]byte
+func (bc *BlockChain) GetBlockHashes() []string {
+	var hashes []string
 	bci := bc.iterator()
 	for {
 		block := bci.NextBlockinfo()
@@ -360,7 +377,7 @@ func (bc *BlockChain) GetBlockHashesHex() []string {
 	bci := bc.iterator()
 	for {
 		block := bci.NextBlockinfo()
-		hashes = append(hashes, hex.EncodeToString(block.GetHeader().GetHash()))
+		hashes = append(hashes, block.GetHeader().GetHash())
 		if block.GetHeight() == 0 {
 			break
 		}
@@ -394,12 +411,17 @@ func CreateBlockChain(nodeID string) *BlockChain {
 			glg.Fatal(err)
 		}
 		return &BlockChain{
-			tip: tip,
-			db:  db,
-			mu:  &sync.RWMutex{},
+			tip:    tip,
+			db:     db,
+			mu:     &sync.RWMutex{},
+			logger: helpers.Logger(),
 		}
 	}
 	genesis := GenesisBlock(nodeID)
+	genesisHash, err := hex.DecodeString(genesis.GetHeader().GetHash())
+	if err != nil {
+		glg.Fatal(err)
+	}
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	if err != nil {
 		glg.Fatal(err)
@@ -418,12 +440,12 @@ func CreateBlockChain(nodeID string) *BlockChain {
 		}
 		blockinfoBytes := blockinfo.Serialize()
 
-		if err = b.Put(genesis.GetHeader().GetHash(), blockinfoBytes); err != nil {
+		if err = b.Put(genesisHash, blockinfoBytes); err != nil {
 			glg.Fatal(err)
 		}
 
 		//latest block on the chain
-		if err = b.Put([]byte("l"), genesis.GetHeader().GetHash()); err != nil {
+		if err = b.Put([]byte("l"), genesisHash); err != nil {
 			glg.Fatal(err)
 		}
 		return nil
@@ -432,9 +454,10 @@ func CreateBlockChain(nodeID string) *BlockChain {
 		glg.Fatal(err)
 	}
 	bc := &BlockChain{
-		tip: genesis.Header.GetHash(),
-		db:  db,
-		mu:  &sync.RWMutex{},
+		tip:    genesisHash,
+		db:     db,
+		mu:     &sync.RWMutex{},
+		logger: helpers.Logger(),
 	}
 	return bc
 }

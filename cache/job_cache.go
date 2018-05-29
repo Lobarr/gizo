@@ -4,8 +4,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kpango/glg"
-
 	"github.com/allegro/bigcache"
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
@@ -19,6 +17,7 @@ var (
 	ErrCacheFull = errors.New("Cache: Cache filled up")
 )
 
+//JobCache holds most likely to be executed jobs
 type JobCache struct {
 	cache *bigcache.BigCache
 	bc    *core.BlockChain
@@ -48,7 +47,6 @@ func (c JobCache) watch() {
 		for {
 			select {
 			case <-ticker.C:
-				glg.Warn("Job Cache: Updating cache")
 				c.fill()
 			case <-quit:
 				ticker.Stop()
@@ -90,7 +88,7 @@ func (c JobCache) fill() {
 				jobs = append(jobs, job.GetJob())
 			}
 		}
-		sorted := mergeSort(jobs)
+		sorted := job.UniqJob(mergeSort(jobs))
 		if len(sorted) > MaxCacheLen {
 			for i := 0; i <= MaxCacheLen; i++ {
 				c.Set(sorted[i].GetID(), sorted[i].Serialize())
@@ -100,11 +98,10 @@ func (c JobCache) fill() {
 				c.Set(job.GetID(), job.Serialize())
 			}
 		}
-	} else {
-		glg.Warn("Job Cache: Unable to refill cache - No blocks")
 	}
 }
 
+//NewJobCache return s initialized job cache
 func NewJobCache(bc *core.BlockChain) *JobCache {
 	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	jc := JobCache{c, bc}

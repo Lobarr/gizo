@@ -71,7 +71,7 @@ func TestJobCache(t *testing.T) {
 	bc.AddBlock(blk2)
 	blk3 := core.NewBlock(*tree3, bc.GetLatestBlock().GetHeader().GetHash(), bc.GetNextHeight(), 10, "test")
 	bc.AddBlock(blk3)
-	c := cache.NewJobCache(bc)
+	c := cache.NewJobCacheNoWatch(bc)
 	cj1, err := c.Get(j1.GetID())
 	assert.NoError(t, err)
 	assert.NotNil(t, cj1)

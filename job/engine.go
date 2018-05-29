@@ -39,6 +39,20 @@ type Job struct {
 	Private        bool //private job flag (default to false - public)
 }
 
+//UniqJob returns unique values of parameter
+func UniqJob(jobs []Job) []Job {
+	temp := []Job{}
+	seen := make(map[string]bool)
+	for _, job := range jobs {
+		if _, ok := seen[job.GetID()]; ok {
+			continue
+		}
+		seen[job.GetID()] = true
+		temp = append(temp, job)
+	}
+	return temp
+}
+
 func (j *Job) Sign(priv []byte) {
 	hash := sha256.Sum256([]byte(j.GetTask()))
 	privateKey, _ := x509.ParseECPrivateKey(priv)
@@ -277,15 +291,24 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 	}
 	glg.Info("Job: Executing job - " + j.GetID())
 	start := time.Now()
-	done := make(chan struct{})
+	cancelClose := make(chan struct{})
+	timeoutClose := make(chan struct{})
+	execClose := make(chan struct{})
+	routines := make(map[string]chan struct{})
+	routines["cancel"] = cancelClose
+	routines["timeout"] = timeoutClose
+	routines["exec"] = execClose
+	done := make(chan string)
+	execute := make(chan struct{})
 	exec.SetStatus(RUNNING)
 	exec.SetTimestamp(time.Now().Unix())
 	//! watch for cancellation
 	go func() {
 		select {
+		case <-cancelClose:
+			return
 		case <-exec.GetCancelChan():
-			glg.Warn("Job: Cancelling running job" + j.GetID())
-			done <- struct{}{}
+			done <- "cancel"
 		}
 	}()
 	//! watch for timeout
@@ -297,48 +320,61 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 			ttl = DefaultMaxTTL
 		}
 		select {
+		case <-timeoutClose:
+			return
 		case <-time.NewTimer(ttl).C:
 			exec.SetStatus(TIMEOUT)
 			glg.Warn("Job: Job timeout - " + j.GetID())
-			done <- struct{}{}
+			done <- "timeout"
 		}
 	}()
 	//! execute job
 	go func() {
-		r := exec.GetRetries()
-	retry:
-		//TODO: support tmp directory for saved files
-		//TODO: clean tmp directory every 10 mins
-		env := anko_vm.NewEnv()
-		anko_core.LoadAllBuiltins(env) //!FIXME: switch to gizo-network/anko
-		envs, err := exec.GetEnvsMap(passphrase)
-		var result interface{}
-		if err == nil {
-			env.Define("env", envs)
-			if len(exec.GetArgs()) == 0 {
-				result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + "()")
-			} else {
-				result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + argsStringified(exec.GetArgs()))
-			}
+		select {
+		case <-execClose:
+			return
+		case <-execute:
+			r := exec.GetRetries()
+		retry:
+			//TODO: support tmp directory for saved files
+			//TODO: clean tmp directory every 10 mins
+			env := anko_vm.NewEnv()
+			anko_core.LoadAllBuiltins(env) //!FIXME: switch to gizo-network/anko
+			envs, err := exec.GetEnvsMap(passphrase)
+			var result interface{}
+			if err == nil {
+				env.Define("env", envs)
+				if len(exec.GetArgs()) == 0 {
+					result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + "()")
+				} else {
+					result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + argsStringified(exec.GetArgs()))
+				}
 
-			if r != 0 && err != nil {
-				r--
-				time.Sleep(exec.GetBackoff())
-				exec.SetStatus(RETRYING)
-				exec.IncrRetriesCount()
-				glg.Warn("Job: Retrying job - " + j.GetID())
-				goto retry
+				if r != 0 && err != nil {
+					r--
+					time.Sleep(exec.GetBackoff())
+					exec.SetStatus(RETRYING)
+					exec.IncrRetriesCount()
+					glg.Warn("Job: Retrying job - " + j.GetID())
+					goto retry
+				}
+			}
+			exec.SetDuration(time.Duration(time.Now().Sub(start).Nanoseconds()))
+			exec.SetErr(err)
+			exec.SetResult(result)
+			exec.setHash()
+			exec.SetStatus(FINISHED)
+			done <- "exec"
+		}
+	}()
+	execute <- struct{}{}
+	select {
+	case complete := <-done:
+		for routine, channel := range routines {
+			if routine != complete { // sends close signal to other goroutes
+				channel <- struct{}{}
 			}
 		}
-		exec.SetDuration(time.Duration(time.Now().Sub(start).Nanoseconds()))
-		exec.SetErr(err)
-		exec.SetResult(result)
-		exec.setHash()
-		exec.SetStatus(FINISHED)
-		done <- struct{}{}
-	}()
-	select {
-	case <-done:
 		return exec
 	}
 }

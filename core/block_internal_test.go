@@ -20,7 +20,7 @@ func TestNewBlock(t *testing.T) {
 	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
 	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
 	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
+	prevHash := "00000000000000000000000000000000000000"
 	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
 
 	assert.NotNil(t, testBlock, "returned empty tblock")
