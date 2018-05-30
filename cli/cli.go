@@ -13,6 +13,7 @@ var gizoCmd = &cobra.Command{
 	Version: "1.0.0",
 }
 
+//Execute boostraps all commands
 func Execute() {
 	gizoCmd.AddCommand(workerCmd, dispatcherCmd, cleardbCmd)
 	if err := gizoCmd.Execute(); err != nil {

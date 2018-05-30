@@ -47,10 +47,12 @@ func NewChain(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 	return c, nil
 }
 
+//Cancel terminates exec
 func (c *Chain) Cancel() {
 	c.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (c Chain) GetCancelChan() chan struct{} {
 	return c.cancel
 }

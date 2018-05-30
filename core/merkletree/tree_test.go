@@ -1,7 +1,6 @@
 package merkletree_test
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/gizo-network/gizo/core/merkletree"
@@ -19,10 +18,11 @@ func TestErrors(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes_8 := []*merkletree.MerkleNode{}
 	for i := 0; i < 8; i++ {
-		nodes_8 = append(nodes_8, merkletree.NewNode(*j, nil, nil))
+		node, _ := merkletree.NewNode(*j, nil, nil)
+		nodes_8 = append(nodes_8, node)
 	}
 
 	tree := merkletree.MerkleTree{LeafNodes: nodes_8}
@@ -33,17 +33,16 @@ func TestBuild(t *testing.T) {
 
 	nodes_max := []*merkletree.MerkleNode{}
 	for i := 0; i < merkletree.MaxTreeJobs+1; i++ {
-		nodes_max = append(nodes_8, merkletree.NewNode(*j, nil, nil))
+		node, _ := merkletree.NewNode(*j, nil, nil)
+		nodes_max = append(nodes_max, node)
 	}
 	tree2 := merkletree.MerkleTree{LeafNodes: nodes_max}
-	// assert.Error(t, tree2.Build())
-	t.Fatal(len(tree2.GetLeafNodes()))
-	t.Fatal(tree2.Build())
+	assert.Error(t, tree2.Build())
 }
 
 func TestNewMerkleTree(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -60,7 +59,7 @@ func TestNewMerkleTree(t *testing.T) {
 
 func TestVerifyTree(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -73,13 +72,13 @@ func TestVerifyTree(t *testing.T) {
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	assert.True(t, tree.VerifyTree())
 
-	tree.SetLeafNodes(tree.GetLeafNodes()[4:])
+	tree.SetLeafNodes(tree.GetLeafNodes()[0:1])
 	assert.False(t, tree.VerifyTree())
 }
 
 func TestSearchNode(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -90,14 +89,14 @@ func TestSearchNode(t *testing.T) {
 	}
 
 	tree, _ := merkletree.NewMerkleTree(nodes)
-	f, err := tree.SearchNode(node5.GetHash())
+	f, err := tree.SearchNode(nodes[4].GetHash())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
 }
 
 func TestSearchJob(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)

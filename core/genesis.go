@@ -22,7 +22,7 @@ func GenesisBlock(by string) *Block {
 		Root:      node.GetHash(),
 		LeafNodes: []*merkletree.MerkleNode{node},
 	}
-	prevHash := "00000000000000000000000000000000000000"
+	prevHash := "47656e65736973"
 	block := NewBlock(tree, prevHash, 0, 10, by)
 	return block
 }

@@ -50,14 +50,17 @@ func NewChord(j []job.JobRequestMultiple, callback job.JobRequestMultiple, bc *c
 	return c, nil
 }
 
+//Cancel terminates chain
 func (c *Chord) Cancel() {
 	c.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (c Chord) GetCancelChan() chan struct{} {
 	return c.cancel
 }
 
+//GetCallback returns callback exec
 func (c Chord) GetCallback() job.JobRequestMultiple {
 	return c.callback
 }

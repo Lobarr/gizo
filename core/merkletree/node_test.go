@@ -1,7 +1,6 @@
 package merkletree_test
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/gizo-network/gizo/crypt"
@@ -13,16 +12,16 @@ import (
 
 func TestNewNode(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, nil, nil)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	assert.NotNil(t, n.GetHash(), "empty hash value")
 	assert.NotNil(t, n, "returned empty node")
 }
 
 func TestIsLeaf(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, nil, nil)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	assert.True(t, n.IsLeaf())
 }
 
@@ -33,8 +32,8 @@ func TestIsEmpty(t *testing.T) {
 
 func TestIsEqual(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, nil, nil)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	equal, err := n.IsEqual(*n)
 	assert.NoError(t, err)
 	assert.True(t, equal)
@@ -42,8 +41,8 @@ func TestIsEqual(t *testing.T) {
 
 func TestMergeJobs(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, nil, nil)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	merged := merkletree.MergeJobs(*n, *n)
 	assert.Equal(t, j.GetID()+j.GetID(), merged.GetID())
 }

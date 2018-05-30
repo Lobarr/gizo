@@ -7,6 +7,7 @@ import (
 	"github.com/kpango/glg"
 )
 
+//Logger initializes logger
 func Logger() *glg.Glg {
 	var logfile *os.File
 	if os.Getenv("ENV") == "dev" {

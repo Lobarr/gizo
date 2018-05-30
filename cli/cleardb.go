@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/gizo-network/gizo/core"
 	"github.com/spf13/cobra"
 )
@@ -16,7 +14,6 @@ var cleardbCmd = &cobra.Command{
 	Short: "Clears db",
 	Run: func(cmd *cobra.Command, args []string) {
 		if env == "dev" {
-			os.Setenv("ENV", "dev")
 			core.RemoveDataPath()
 		} else {
 			core.RemoveDataPath()

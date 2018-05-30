@@ -10,7 +10,8 @@ import (
 	"github.com/gizo-network/gizo/core"
 )
 
-const Blockrate = 15 // blocks per minute
+//Blockrate block per minute
+const Blockrate = 15
 
 //Difficulty returns a difficulty based on the blockrate and the number of blocks in the last minute
 func Difficulty(benchmarks []benchmark.Benchmark, bc core.BlockChain) int {

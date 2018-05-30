@@ -8,5 +8,5 @@ import (
 )
 
 func TestGenesis(t *testing.T) {
-	assert.NotNil(t, core.GenesisBlock())
+	assert.NotNil(t, core.GenesisBlock("test"))
 }

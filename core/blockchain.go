@@ -23,9 +23,12 @@ import (
 )
 
 var (
+	//ErrUnverifiedBlock when unable to verify block
 	ErrUnverifiedBlock = errors.New("Unverified block cannot be added to the blockchain")
-	ErrJobNotFound     = errors.New("Job not found")
-	ErrBlockNotFound   = errors.New("Blockinfo not found")
+	//ErrJobNotFound when unable to find job in bc
+	ErrJobNotFound = errors.New("Job not found")
+	//ErrBlockNotFound when unable to finc block in the bc
+	ErrBlockNotFound = errors.New("Blockinfo not found")
 )
 
 //BlockChain - singly linked list of blocks

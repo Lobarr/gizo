@@ -14,10 +14,12 @@ import (
 )
 
 const (
-	MaxCacheLen = 128 //number of jobs held in cache
+	//MaxCacheLen number of jobs held in cache
+	MaxCacheLen = 128
 )
 
 var (
+	//ErrCacheFull occurs when cache is filled up
 	ErrCacheFull = errors.New("Cache: Cache filled up")
 )
 
@@ -77,7 +79,7 @@ func (c JobCache) Get(key string) (*job.Job, error) {
 		return nil, err
 	}
 	var j *job.Job
-	err = helpers.Deserialize(jBytes, j)
+	err = helpers.Deserialize(jBytes, &j)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +129,7 @@ func NewJobCache(bc *core.BlockChain) *JobCache {
 	return &jc
 }
 
-// creates a new jobcache without updating every minute
+//NewJobCacheNoWatch creates a new jobcache without updating every minute
 func NewJobCacheNoWatch(bc *core.BlockChain) *JobCache {
 	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
 	jc := JobCache{c, bc, helpers.Logger()}

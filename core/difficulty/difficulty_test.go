@@ -1,7 +1,7 @@
 package difficulty_test
 
 import (
-	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 
@@ -21,19 +21,22 @@ func TestDifficulty(t *testing.T) {
 	core.RemoveDataPath()
 	bc := core.CreateBlockChain("test")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
-		if err != nil {
-			assert.NoError(t, err)
-		}
+		assert.NoError(t, err)
 		nodes = append(nodes, node)
 	}
 
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4, node5, node6, node7, node8}
-	tree := merkletree.NewMerkleTree(nodes)
-	block := core.NewBlock(*tree, bc.GetLatestBlock().GetHeader().GetHash(), bc.GetLatestHeight(), 10, "test")
+	tree, err := merkletree.NewMerkleTree(nodes)
+	assert.NoError(t, err)
+	fmt.Println("passed here")
+	latest_block, err := bc.GetLatestBlock()
+	assert.NoError(t, err)
+	latest_height, err := bc.GetLatestHeight()
+	assert.NoError(t, err)
+	block := core.NewBlock(*tree, latest_block.GetHeader().GetHash(), uint64(latest_height), 10, "test")
 	bc.AddBlock(block)
 	d10 := benchmark.NewBenchmark(0.0115764096, 10)
 	d11 := benchmark.NewBenchmark(0.13054728, 11)

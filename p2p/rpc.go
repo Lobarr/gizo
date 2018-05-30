@@ -173,7 +173,8 @@ func (d Dispatcher) NewJob(task string, name string, priv bool, privKey string) 
 }
 
 func (d Dispatcher) NewExec(args []interface{}, retries, priority int, backoff int64, execTime int64, interval int, ttl int64, pub string, envs string) (string, error) {
-	e, err := job.DeserializeEnvs([]byte(envs))
+	var e job.EnvironmentVariables
+	err := helpers.Deserialize([]byte(envs), &e)
 	if err != nil {
 		return "", err
 	}

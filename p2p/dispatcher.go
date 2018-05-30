@@ -375,7 +375,7 @@ func (d Dispatcher) wPeerTalk() {
 			if m.VerifySignature(d.GetWorker(s).GetPub()) {
 				glg.Info("P2P: received result")
 				var exec *job.Exec
-				err := helpers.Deserialize(m.GetPayload(), exec)
+				err := helpers.Deserialize(m.GetPayload(), &exec)
 				if err != nil {
 					//FIXME:
 				}
@@ -434,7 +434,7 @@ func (d Dispatcher) dPeerTalk() {
 			d.mu.Lock()
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub())) {
 				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), b)
+				err := helpers.Deserialize(m.GetPayload(), &b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -525,7 +525,7 @@ func (d Dispatcher) handleNodeConnect(conn *websocket.Conn) {
 			d.mu.Lock()
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub())) {
 				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), b)
+				err := helpers.Deserialize(m.GetPayload(), &b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -548,7 +548,7 @@ func (d Dispatcher) handleNodeConnect(conn *websocket.Conn) {
 		case BLOCKRES:
 			if m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub())) {
 				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), b)
+				err := helpers.Deserialize(m.GetPayload(), &b)
 				if err != nil {
 					glg.Fatal(err)
 				}
@@ -806,7 +806,7 @@ func NewDispatcher(port int) *Dispatcher {
 			priv = b.Get([]byte("priv"))
 			pub = b.Get([]byte("pub"))
 			var bench *benchmark.Engine
-			err := helpers.Deserialize(b.Get([]byte("benchmark")), bench)
+			err := helpers.Deserialize(b.Get([]byte("benchmark")), &bench)
 			if err != nil {
 				//FIXME:
 			}

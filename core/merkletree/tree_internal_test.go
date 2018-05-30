@@ -1,7 +1,6 @@
 package merkletree
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/gizo-network/gizo/crypt"
@@ -11,11 +10,11 @@ import (
 
 func TestMerge(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := NewNode(*j, nil, nil)
-	node2 := NewNode(*j, nil, nil)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	node1, _ := NewNode(*j, nil, nil)
+	node2, _ := NewNode(*j, nil, nil)
 
-	parent := merge(*node1, *node2)
+	parent, _ := merge(*node1, *node2)
 	assert.NotNil(t, parent)
 	assert.NotNil(t, parent.GetHash())
 	assert.Equal(t, node1.GetHash(), parent.GetLeftNode().GetHash())

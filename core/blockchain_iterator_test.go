@@ -12,5 +12,7 @@ func TestNext(t *testing.T) {
 	RemoveDataPath()
 	bc := CreateBlockChain("test")
 	bci := bc.iterator()
-	assert.NotNil(t, bci.Next())
+	next, err := bci.Next()
+	assert.NoError(t, err)
+	assert.NotNil(t, next)
 }

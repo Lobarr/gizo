@@ -41,7 +41,7 @@ func (i *BlockChainIterator) Next() (*Block, error) {
 	return block, nil
 }
 
-// Next returns the next blockinfo in the blockchain - more lightweight
+// NextBlockinfo returns the next blockinfo in the blockchain - more lightweight
 func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
 	var block *BlockInfo
 	err := i.db.View(func(tx *bolt.Tx) error {

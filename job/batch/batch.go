@@ -47,10 +47,12 @@ func NewBatch(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 	return b, nil
 }
 
+//Cancel terminates batch
 func (b *Batch) Cancel() {
 	b.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (b Batch) GetCancelChan() chan struct{} {
 	return b.cancel
 }

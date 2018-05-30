@@ -2,17 +2,24 @@ package merkletree
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/gizo-network/gizo/job"
 )
 
 var (
-	ErrNodeDoesntExist    = errors.New("core/merkletree: node doesn't exist")
-	ErrLeafNodesEmpty     = errors.New("core/merkletree: leafnodes is empty")
-	ErrTreeNotBuilt       = errors.New("core/merkletree: tree hasn't been built")
+	//ErrNodeDoesntExist occurs when merklenode doesn't exist
+	ErrNodeDoesntExist = errors.New("core/merkletree: node doesn't exist")
+	//ErrLeafNodesEmpty occurs when merkletree with empty leafnodes is attempted to be built
+	ErrLeafNodesEmpty = errors.New("core/merkletree: leafnodes is empty")
+	//ErrTreeNotBuilt occurs when tree hasn't been built
+	ErrTreeNotBuilt = errors.New("core/merkletree: tree hasn't been built")
+	//ErrTreeRebuildAttempt occurs when tree rebuild is attempted
 	ErrTreeRebuildAttempt = errors.New("core/merkletree: attempt to rebuild tree")
-	ErrTooMuchLeafNodes   = errors.New("core/merkletree: length of leaf nodes is greater than 24")
-	ErrJobDoesntExist     = errors.New("core/merkletree: job doesn't exist")
+	//ErrTooMuchLeafNodes occurs when merkletree is attempted to be built with more block than allowed
+	ErrTooMuchLeafNodes = errors.New("core/merkletree: length of leaf nodes is greater than 24")
+	//ErrJobDoesntExist occurs when job doesn't exist
+	ErrJobDoesntExist = errors.New("core/merkletree: job doesn't exist")
 )
 
 // MerkleTree tree of jobs
@@ -47,31 +54,31 @@ func (m *MerkleTree) Build() error {
 	}
 	if len(m.GetLeafNodes()) > MaxTreeJobs {
 		return ErrTooMuchLeafNodes
-	} else {
-		var shrink = m.GetLeafNodes()
-		for len(shrink) != 1 {
-			var levelUp []*MerkleNode
-			if len(shrink)%2 == 0 {
-				for i := 0; i < len(shrink); i += 2 {
-					parent, err := merge(*shrink[i], *shrink[i+1])
-					if err != nil {
-						return err
-					}
-					levelUp = append(levelUp, parent)
+	}
+	var shrink = m.GetLeafNodes()
+	for len(shrink) != 1 {
+		var levelUp []*MerkleNode
+		if len(shrink)%2 == 0 {
+			for i := 0; i < len(shrink); i += 2 {
+				parent, err := merge(*shrink[i], *shrink[i+1])
+				if err != nil {
+					return err
 				}
-			} else {
-				shrink = append(shrink, shrink[len(shrink)-1]) //duplicate last to balance tree
-				for i := 0; i < len(shrink); i += 2 {
-					parent, err := merge(*shrink[i], *shrink[i+1])
-					if err != nil {
-						return err
-					}
-					levelUp = append(levelUp, parent)
-				}
+				levelUp = append(levelUp, parent)
 			}
-			shrink = levelUp
+		} else {
+			shrink = append(shrink, shrink[len(shrink)-1]) //duplicate last to balance tree
+			for i := 0; i < len(shrink); i += 2 {
+				parent, err := merge(*shrink[i], *shrink[i+1])
+				if err != nil {
+					return err
+				}
+				levelUp = append(levelUp, parent)
+			}
 		}
-		m.Root = shrink[0].GetHash()
+		m.setRoot(shrink[0].GetHash())
+		fmt.Println(m.GetRoot())
+		shrink = levelUp
 	}
 	return nil
 }
@@ -79,6 +86,8 @@ func (m *MerkleTree) Build() error {
 //VerifyTree returns true if tree is verified
 func (m MerkleTree) VerifyTree() bool {
 	t, _ := NewMerkleTree(m.GetLeafNodes())
+	fmt.Println(t.GetRoot(), len(t.GetLeafNodes()))
+	fmt.Println(m.GetRoot(), len(t.GetLeafNodes()))
 	return t.GetRoot() == m.GetRoot()
 }
 

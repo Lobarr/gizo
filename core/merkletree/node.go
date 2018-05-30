@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"reflect"
 
 	"github.com/gizo-network/gizo/helpers"
 
@@ -80,13 +79,12 @@ func (n *MerkleNode) SetRightNode(r MerkleNode) {
 
 //IsLeaf checks if the merklenode is a leaf node
 func (n *MerkleNode) IsLeaf() bool {
-	return n.Left.IsEmpty() && n.Right.IsEmpty()
+	return n.Left == nil && n.Right == nil
 }
 
 //IsEmpty check if the merklenode is empty
 func (n *MerkleNode) IsEmpty() bool {
-	//FIXME: add isempty check for job
-	return reflect.ValueOf(n.Right).IsNil() && reflect.ValueOf(n.Left).IsNil() && n.GetJob().IsEmpty() && n.GetHash() == ""
+	return n.Right == nil && n.Left == nil && n.GetJob().IsEmpty() && n.GetHash() == ""
 }
 
 //IsEqual check if the input merklenode equals the merklenode calling the function
@@ -119,7 +117,7 @@ func MergeJobs(x, y MerkleNode) job.Job {
 		ID:        x.GetJob().GetID() + y.GetJob().GetID(),
 		Hash:      x.GetJob().GetHash() + y.GetJob().GetHash(),
 		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),
-		Task:      x.GetJob().GetTask() + y.GetJob().GetTask(),
+		Task:      helpers.Encode64(bytes.Join([][]byte{[]byte(x.GetJob().GetTask()), []byte(y.GetJob().GetTask())}, []byte{})),
 		Signature: x.GetJob().GetSignature() + y.GetJob().GetSignature(),
 	}
 }

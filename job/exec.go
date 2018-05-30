@@ -41,7 +41,11 @@ func NewExec(args []interface{}, retries, priority int, backoff time.Duration, e
 		return nil, ErrRetriesOutsideLimit
 	}
 
-	encryptEnvs := helpers.Encrypt(envs.Serialize(), passphrase)
+	envsBytes, err := helpers.Serialize(envs)
+	if err != nil {
+		return nil, err
+	}
+	encryptEnvs := helpers.Encrypt(envsBytes, passphrase)
 	ex := &Exec{
 		Args:          args,
 		Retries:       retries,
@@ -72,7 +76,12 @@ func (e Exec) GetEnvs(passphrase string) (EnvironmentVariables, error) {
 	if err != nil {
 		return EnvironmentVariables{}, errors.New("Unable to decrypt environment variables")
 	}
-	return DeserializeEnvs(d)
+	var envs EnvironmentVariables
+	err = helpers.Deserialize(d, &envs)
+	if err != nil {
+		return EnvironmentVariables{}, err
+	}
+	return envs, nil
 }
 
 //returns environment variables as a map

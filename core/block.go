@@ -16,7 +16,9 @@ import (
 )
 
 var (
-	ErrUnableToExport   = errors.New("Unable to export block")
+	//ErrUnableToExport occurs when unable to write blockfile to disk
+	ErrUnableToExport = errors.New("Unable to export block")
+	//ErrHashModification occurs when hash of block is attempted to be modified
 	ErrHashModification = errors.New("Attempt to modify hash value of block")
 )
 
@@ -84,7 +86,7 @@ func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficult
 	return block
 }
 
-//writes block on disk
+//Export writes block on disk
 func (b Block) Export() error {
 	InitializeDataPath()
 	if b.IsEmpty() {
@@ -119,7 +121,7 @@ func (b *Block) Import(hash string) {
 	}
 	bBytes := helpers.Decode64(string(read))
 	temp := &Block{}
-	err = helpers.Deserialize(bBytes, temp)
+	err = helpers.Deserialize(bBytes, &temp)
 	if err != nil {
 		glg.Fatal(err)
 	}

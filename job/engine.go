@@ -24,10 +24,14 @@ import (
 )
 
 var (
-	ErrUnverifiedSignature = errors.New("signature not verified")
-	ErrUnableToConvert     = errors.New("Unable to convert to string")
+	//ErrUnverifiedSignature when unauthorized person tries to execute private job
+	ErrUnverifiedSignature = errors.New("Signature not verified")
+	//ErrUnableToConvert when args is not able to be converted to string
+	ErrUnableToConvert = errors.New("Unable to convert to string")
+	ErrUnableToSign    = errors.New("Unable to sign job")
 )
 
+//Job holds deployed job
 type Job struct {
 	ID             string
 	Hash           string
@@ -53,6 +57,7 @@ func UniqJob(jobs []Job) []Job {
 	return temp
 }
 
+//Sign signature of owner of ob
 func (j *Job) Sign(priv string) error {
 	hash := sha256.Sum256([]byte(j.GetTask()))
 	privBytes, err := hex.DecodeString(priv)
@@ -62,12 +67,13 @@ func (j *Job) Sign(priv string) error {
 	privateKey, _ := x509.ParseECPrivateKey(privBytes)
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
 	if err != nil {
-		glg.Fatal("Job: unable to sign job")
+		glg.Fatal()
 	}
 	j.setSignature(hex.EncodeToString(r.Bytes()) + hex.EncodeToString(s.Bytes()))
 	return nil
 }
 
+//VerifySignature verifies if pub is for the owner
 func (j Job) VerifySignature(pub string) (bool, error) {
 	pubBytes, err := hex.DecodeString(pub)
 	if err != nil {
@@ -97,6 +103,7 @@ func (j Job) VerifySignature(pub string) (bool, error) {
 	}
 }
 
+//GetSubmissionTime returns submission time
 func (j Job) GetSubmissionTime() int64 {
 	return j.SubmissionTime
 }
@@ -105,10 +112,12 @@ func (j *Job) setSubmissionTime(t time.Time) {
 	j.SubmissionTime = t.Unix()
 }
 
+//IsEmpty check if job is empty
 func (j Job) IsEmpty() bool {
-	return j.GetID() == "" && reflect.ValueOf(j.GetHash()).IsNil() && reflect.ValueOf(j.GetExecs()).IsNil() && j.GetTask() == "" && reflect.ValueOf(j.GetSignature()).IsNil() && j.GetName() == ""
+	return j.GetID() == "" && j.GetHash() == "" && reflect.ValueOf(j.GetExecs()).IsNil() && j.GetTask() == "" && j.GetSignature() == "" && j.GetName() == ""
 }
 
+//NewJob initializes a new job
 func NewJob(task string, name string, priv bool, privKey string) (*Job, error) {
 	j := &Job{
 		SubmissionTime: time.Now().Unix(),
@@ -126,6 +135,7 @@ func NewJob(task string, name string, priv bool, privKey string) (*Job, error) {
 	return j, nil
 }
 
+//GetPrivate check if job is private
 func (j Job) GetPrivate() bool {
 	return j.Private
 }
@@ -134,6 +144,7 @@ func (j *Job) setPrivate(p bool) {
 	j.Private = p
 }
 
+//GetName returns name of job
 func (j Job) GetName() string {
 	return j.Name
 }
@@ -142,10 +153,12 @@ func (j *Job) setName(n string) {
 	j.Name = n
 }
 
+//GetID returns job id
 func (j Job) GetID() string {
 	return j.ID
 }
 
+//GetHash return job hash
 func (j Job) GetHash() string {
 	return j.Hash
 }
@@ -211,6 +224,7 @@ func (j Job) serializeExecs() []byte {
 	return temp
 }
 
+//GetExec return exec of specified hash
 func (j Job) GetExec(hash string) (*Exec, error) {
 	for _, exec := range j.GetExecs() {
 		if exec.GetHash() == hash {
@@ -220,14 +234,17 @@ func (j Job) GetExec(hash string) (*Exec, error) {
 	return nil, ErrExecNotFound
 }
 
+//GetLatestExec return latest exec of job
 func (j Job) GetLatestExec() Exec {
 	return j.Execs[len(j.GetExecs())-1]
 }
 
+//GetExecs returns exec of job
 func (j Job) GetExecs() []Exec {
 	return j.Execs
 }
 
+//GetSignature returns job signature
 func (j Job) GetSignature() string {
 	return j.Signature
 }
@@ -236,13 +253,15 @@ func (j *Job) setSignature(sign string) {
 	j.Signature = sign
 }
 
+//AddExec add exec to job
 func (j *Job) AddExec(je Exec) {
 	j.Execs = append(j.Execs, je)
 	j.setHash() //regenerates hash
 }
 
+//GetTask returns task
 func (j Job) GetTask() string {
-	return j.Task
+	return string(helpers.Decode64(j.Task))
 }
 
 //used to stringify arguments
@@ -259,7 +278,6 @@ func toString(x interface{}) (string, error) {
 		return strconv.FormatFloat(v.Float(), 'f', -1, 64), nil
 	case reflect.String:
 		return "\"" + x.(string) + "\"", nil
-		// return v.String(), nil
 	case reflect.Slice:
 		stringifiy, err := json.Marshal(v.Interface())
 		return string(stringifiy), err
@@ -287,6 +305,7 @@ func argsStringified(args []interface{}) string {
 	return temp + ")"
 }
 
+//Execute runs the exec
 func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 	//TODO: kill goroutines running within this function when it exits
 	if j.GetPrivate() == true {
