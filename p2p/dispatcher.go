@@ -110,7 +110,10 @@ func (d Dispatcher) WriteJobs(jobs []job.Job) {
 	if err != nil {
 		//FIXME:
 	}
-	block := core.NewBlock(*tree, latestBlock.GetHeader().GetHash(), nextHeight, uint8(difficulty.Difficulty(d.GetBenchmarks(), *d.GetBC())), d.GetPubString())
+	block, err := core.NewBlock(*tree, latestBlock.GetHeader().GetHash(), nextHeight, uint8(difficulty.Difficulty(d.GetBenchmarks(), *d.GetBC())), d.GetPubString())
+	if err != nil {
+		//FIXME:
+	}
 	err = d.GetBC().AddBlock(block)
 	if err != nil {
 		glg.Fatal(err)

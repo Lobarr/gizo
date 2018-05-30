@@ -11,8 +11,6 @@ import (
 
 	"github.com/gizo-network/gizo/core/merkletree"
 	"github.com/gizo-network/gizo/helpers"
-
-	"github.com/kpango/glg"
 )
 
 var (
@@ -71,7 +69,7 @@ func (b *Block) setBy(id string) {
 }
 
 //NewBlock returns a new block
-func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficulty uint8, by string) *Block {
+func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficulty uint8, by string) (*Block, error) {
 	block := &Block{
 		Header: BlockHeader{
 			Timestamp:     time.Now().Unix(),
@@ -86,13 +84,13 @@ func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficult
 	pow := NewPOW(block)
 	err := pow.run() //! mines block
 	if err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
 	err = block.Export()
 	if err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
-	return block
+	return block, nil
 }
 
 //Export writes block on disk
@@ -106,18 +104,15 @@ func (b Block) Export() error {
 		return err
 	}
 	if os.Getenv("ENV") == "dev" {
-		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0555))
+		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0644))
 	} else {
-		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0555))
+		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0644))
 	}
 	return err
 }
 
 //Import reads block file into memory
-func (b *Block) Import(hash string) {
-	if b.IsEmpty() == false {
-		glg.Warn("Overwriting umempty block")
-	}
+func (b *Block) Import(hash string) error {
 	var read []byte
 	var err error
 	if os.Getenv("ENV") == "dev" {
@@ -126,18 +121,19 @@ func (b *Block) Import(hash string) {
 		read, err = ioutil.ReadFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, hash)))
 	}
 	if err != nil {
-		glg.Fatal(err) //FIXME: handle block doesn't exist by asking peer
+		return err //FIXME: handle block doesn't exist by asking peer
 	}
 	bBytes := helpers.Decode64(string(read))
 	temp := &Block{}
 	err = helpers.Deserialize(bBytes, &temp)
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
 	b.setHeader(temp.GetHeader())
 	b.setHeight(temp.GetHeight())
 	b.setNodes(temp.GetNodes())
 	b.setBy(temp.GetBy())
+	return nil
 }
 
 //returns the file stats of a blockfile
@@ -150,7 +146,7 @@ func (b Block) fileStats() os.FileInfo {
 		info, err = os.Stat(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())))
 	}
 	if os.IsNotExist(err) {
-		glg.Fatal("Block file doesn't exist")
+		helpers.Logger().Fatal("Core: block file doesn't exist, blocks folder corrupted")
 	}
 	return info
 }
@@ -162,14 +158,12 @@ func (b *Block) IsEmpty() bool {
 
 //VerifyBlock verifies a block
 func (b *Block) VerifyBlock() (bool, error) {
-	glg.Info("Core: Verifying block - " + b.GetHeader().GetHash())
 	pow := NewPOW(b)
 	return pow.Validate()
 }
 
 //DeleteFile deletes block file on disk
-func (b Block) DeleteFile() {
-	glg.Info("Core: Deleting blockfile - " + b.GetHeader().GetHash())
+func (b Block) DeleteFile() error {
 	var err error
 	if os.Getenv("ENV") == "dev" {
 		err = os.Remove(path.Join(BlockPathDev, b.fileStats().Name()))
@@ -177,6 +171,7 @@ func (b Block) DeleteFile() {
 		err = os.Remove(path.Join(BlockPathProd, b.fileStats().Name()))
 	}
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
+	return nil
 }

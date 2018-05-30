@@ -3,8 +3,9 @@ package core
 import (
 	"encoding/hex"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/boltdb/bolt"
-	"github.com/kpango/glg"
 )
 
 //BlockChainIterator - a way to loop through the blockchain (from newest block to oldest block)
@@ -29,7 +30,11 @@ func (i *BlockChainIterator) Next() (*Block, error) {
 	err := i.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		blockinfoBytes := b.Get(i.GetCurrent())
-		blockinfo := DeserializeBlockInfo(blockinfoBytes)
+		var blockinfo *BlockInfo
+		err := helpers.Deserialize(blockinfoBytes, &blockinfo)
+		if err != nil {
+			return err
+		}
 		block = blockinfo.GetBlock()
 		return nil
 	})
@@ -47,12 +52,16 @@ func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
 	err := i.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		blockinfoBytes := b.Get(i.GetCurrent())
-		blockinfo := DeserializeBlockInfo(blockinfoBytes)
+		var blockinfo *BlockInfo
+		err := helpers.Deserialize(blockinfoBytes, &blockinfo)
+		if err != nil {
+			return err
+		}
 		block = blockinfo
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
 	current, err := hex.DecodeString(block.GetHeader().GetPrevBlockHash())
 	if err != nil {

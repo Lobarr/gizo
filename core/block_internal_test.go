@@ -16,6 +16,7 @@ import (
 
 func TestNewBlock(t *testing.T) {
 	os.Setenv("ENV", "dev")
+	InitializeDataPath()
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
 	nodes := []*merkletree.MerkleNode{}
@@ -27,7 +28,8 @@ func TestNewBlock(t *testing.T) {
 	tree, err := merkletree.NewMerkleTree(nodes)
 	assert.NoError(t, err)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
 	assert.NotNil(t, testBlock, "returned empty tblock")
 	assert.Equal(t, testBlock.Header.PrevBlockHash, prevHash, "prevhashes don't match")
@@ -49,7 +51,8 @@ func TestVerifyBlock(t *testing.T) {
 	tree, err := merkletree.NewMerkleTree(nodes)
 	assert.NoError(t, err)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
 	verify, err := testBlock.VerifyBlock()
 	assert.NoError(t, err)
@@ -76,7 +79,8 @@ func TestIsEmpty(t *testing.T) {
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	b := Block{}
 	assert.False(t, testBlock.IsEmpty())
 	assert.True(t, b.IsEmpty())
@@ -97,7 +101,8 @@ func TestExport(t *testing.T) {
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	assert.NotNil(t, testBlock.fileStats().Name())
 	testBlock.DeleteFile()
 }
@@ -116,7 +121,8 @@ func TestImport(t *testing.T) {
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
 	empty := Block{}
 	empty.Import(testBlock.Header.GetHash())
@@ -142,7 +148,8 @@ func TestFileStats(t *testing.T) {
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	assert.Equal(t, testBlock.fileStats().Name(), fmt.Sprintf(BlockFile, testBlock.Header.GetHash()))
 	testBlock.DeleteFile()
 }
@@ -161,8 +168,9 @@ func TestDeleteFile(t *testing.T) {
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
 	prevHash := "00000000000000000000000000000000000000"
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	testBlock.DeleteFile()
-	_, err := os.Stat(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, testBlock.GetHeader().GetHash())))
+	_, err = os.Stat(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, testBlock.GetHeader().GetHash())))
 	assert.True(t, os.IsNotExist(err))
 }

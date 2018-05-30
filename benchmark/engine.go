@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -50,15 +51,19 @@ func (b Engine) block(difficulty uint8) *core.Block {
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
 		if err != nil {
-			glg.Fatal(err)
+			b.logger.Fatal(err)
 		}
 		nodes = append(nodes, node)
 	}
 	tree, err := merkletree.NewMerkleTree(nodes)
 	if err != nil {
-		glg.Fatal(err)
+		b.logger.Fatal(err)
 	}
-	return core.NewBlock(*tree, "47656e65736973", uint64(rand.Int()), difficulty, "benchmark-engine")
+	block, err := core.NewBlock(*tree, "47656e65736973", uint64(rand.Int()), difficulty, "62656e63686d61726b2d656e67696e65")
+	if err != nil {
+		b.logger.Fatal(err)
+	}
+	return block
 }
 
 // Run executes the benchmark engine
@@ -107,6 +112,7 @@ func (b *Engine) run() {
 						}
 						b.addBenchmark(NewBenchmark(average, uint8(myDifficulty)))
 					}
+					b.logger.Log("Bechmark: completed benchmark for difficulty " + strconv.FormatInt(int64(myDifficulty), 10))
 					wg.Done()
 				}(difficulty)
 				difficulty++

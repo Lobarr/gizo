@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/kpango/glg"
+	"github.com/gizo-network/gizo/helpers"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +17,6 @@ var gizoCmd = &cobra.Command{
 func Execute() {
 	gizoCmd.AddCommand(workerCmd, dispatcherCmd, cleardbCmd)
 	if err := gizoCmd.Execute(); err != nil {
-		glg.Fatal(err)
+		helpers.Logger().Fatal(err)
 	}
 }

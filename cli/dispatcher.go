@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/gizo-network/gizo/helpers"
 	"github.com/gizo-network/gizo/p2p"
+	"github.com/kpango/glg"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +18,9 @@ var dispatcherCmd = &cobra.Command{
 	Short: "Spin up a dispatcher node",
 	Run: func(cmd *cobra.Command, args []string) {
 		helpers.Banner()
+		if os.Getenv("ENV") == "dev" {
+			glg.Log("Core: using dev blockchain")
+		}
 		d := p2p.NewDispatcher(port)
 		d.Start()
 	},

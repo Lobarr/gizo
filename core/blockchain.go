@@ -78,7 +78,10 @@ func (bc *BlockChain) GetBlockInfo(hash string) (*BlockInfo, error) {
 		}
 		blockinfoBytes := b.Get(hashBytes)
 		if blockinfoBytes != nil {
-			blockinfo = DeserializeBlockInfo(blockinfoBytes)
+			err = helpers.Deserialize(blockinfoBytes, &blockinfo)
+			if err != nil {
+				return err
+			}
 		} else {
 			blockinfo = nil
 		}
@@ -171,7 +174,10 @@ func (bc *BlockChain) GetLatestHeight() (int, error) {
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		lastBlockBytes := b.Get(bc.getTip())
-		lastBlock = DeserializeBlockInfo(lastBlockBytes)
+		err := helpers.Deserialize(lastBlockBytes, &lastBlock)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -186,7 +192,10 @@ func (bc *BlockChain) GetLatestBlock() (*Block, error) {
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		lastBlockBytes := b.Get(bc.getTip())
-		lastBlock = DeserializeBlockInfo(lastBlockBytes)
+		err := helpers.Deserialize(lastBlockBytes, &lastBlock)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -221,7 +230,7 @@ func (bc *BlockChain) AddBlock(block *Block) error {
 		}
 		inDb := b.Get(hashBytes)
 		if inDb != nil {
-			glg.Warn("Block exists in blockchain")
+			bc.logger.Warn("Core: block exists in blockchain")
 			return nil
 		}
 
@@ -249,14 +258,14 @@ func (bc *BlockChain) AddBlock(block *Block) error {
 		if block.GetHeight() > latest.GetHeight() {
 
 			if err := b.Put([]byte("l"), hashBytes); err != nil {
-				glg.Fatal(err)
+				return err
 			}
 			bc.setTip(hashBytes)
 		}
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
 	return nil
 }
@@ -272,7 +281,6 @@ func (bc *BlockChain) iterator() *BlockChainIterator {
 //FindJob returns the job from the blockchain
 func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
 	//FIXME: speed up
-	glg.Info("Core: Finding Job in the blockchain - " + id)
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
@@ -300,7 +308,6 @@ func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
 //FindExec finds exec in the bc
 func (bc *BlockChain) FindExec(id string, hash string) (*job.Exec, error) {
 	//FIXME: speed up
-	glg.Info("Core: Finding Job in the blockchain - " + id)
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
@@ -327,7 +334,6 @@ func (bc *BlockChain) FindExec(id string, hash string) (*job.Exec, error) {
 //GetJobExecs returns all execs of a job
 func (bc *BlockChain) GetJobExecs(id string) ([]job.Exec, error) {
 	//FIXME: speed up
-	glg.Info("Core: Finding Job in the blockchain - " + id)
 	execs := []job.Exec{}
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
@@ -364,7 +370,7 @@ func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
 		tree.SetLeafNodes(block.GetNodes())
 		found, err := tree.SearchNode(h)
 		if err != nil {
-			glg.Fatal(err)
+			return nil, err
 		}
 		return found, nil
 	}
@@ -372,7 +378,6 @@ func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
 
 //Verify verifies the blockchain
 func (bc *BlockChain) Verify() (bool, error) {
-	glg.Info("Core: Verifying Blockchain")
 	bci := bc.iterator()
 	for {
 		block, err := bci.Next()
@@ -428,7 +433,8 @@ func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain
 func CreateBlockChain(nodeID string) *BlockChain {
-	glg.Info("Core: Creating blockchain database")
+	logger := helpers.Logger()
+	logger.Log("Core: Creating blockchain database")
 	InitializeDataPath()
 	var dbFile string
 	if os.Getenv("ENV") == "dev" {
@@ -438,10 +444,10 @@ func CreateBlockChain(nodeID string) *BlockChain {
 	}
 	if helpers.FileExists(dbFile) {
 		var tip []byte
-		glg.Warn("Core: Using existing blockchain")
+		logger.Info("Core: Using existing blockchain")
 		db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 		if err != nil {
-			glg.Fatal(err)
+			logger.Fatal(err)
 		}
 		err = db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(BlockBucket))
@@ -449,7 +455,7 @@ func CreateBlockChain(nodeID string) *BlockChain {
 			return nil
 		})
 		if err != nil {
-			glg.Fatal(err)
+			logger.Fatal(err)
 		}
 		return &BlockChain{
 			tip:    tip,
@@ -461,16 +467,16 @@ func CreateBlockChain(nodeID string) *BlockChain {
 	genesis := GenesisBlock(nodeID)
 	genesisHash, err := hex.DecodeString(genesis.GetHeader().GetHash())
 	if err != nil {
-		glg.Fatal(err)
+		logger.Fatal(err)
 	}
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	if err != nil {
-		glg.Fatal(err)
+		logger.Fatal(err)
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucket([]byte(BlockBucket))
 		if err != nil {
-			glg.Fatal(err)
+			logger.Fatal(err)
 		}
 		blockinfo := BlockInfo{
 			Header:    genesis.GetHeader(),
@@ -479,26 +485,29 @@ func CreateBlockChain(nodeID string) *BlockChain {
 			FileName:  genesis.fileStats().Name(),
 			FileSize:  genesis.fileStats().Size(),
 		}
-		blockinfoBytes := blockinfo.Serialize()
+		blockinfoBytes, err := helpers.Serialize(blockinfo)
+		if err != nil {
+			logger.Fatal(err)
+		}
 
 		if err = b.Put(genesisHash, blockinfoBytes); err != nil {
-			glg.Fatal(err)
+			logger.Fatal(err)
 		}
 
 		//latest block on the chain
 		if err = b.Put([]byte("l"), genesisHash); err != nil {
-			glg.Fatal(err)
+			logger.Fatal(err)
 		}
 		return nil
 	})
 	if err != nil {
-		glg.Fatal(err)
+		logger.Fatal(err)
 	}
 	bc := &BlockChain{
 		tip:    genesisHash,
 		db:     db,
 		mu:     &sync.RWMutex{},
-		logger: helpers.Logger(),
+		logger: logger,
 	}
 	return bc
 }

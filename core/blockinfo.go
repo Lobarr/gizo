@@ -1,11 +1,5 @@
 package core
 
-import (
-	"encoding/json"
-
-	"github.com/kpango/glg"
-)
-
 //BlockInfo - model of data written to embedded database
 type BlockInfo struct {
 	Header    BlockHeader
@@ -65,28 +59,9 @@ func (bi BlockInfo) GetFileSize() int64 {
 	return bi.FileSize
 }
 
-//Serialize returns the blockinfo in json bytes
-func (bi *BlockInfo) Serialize() []byte {
-	temp, err := json.Marshal(*bi)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
-}
-
 //GetBlock - imports block from file into memory
 func (bi BlockInfo) GetBlock() *Block {
 	var temp Block
 	temp.Import(bi.GetHeader().GetHash())
-	return &temp
-}
-
-//DeserializeBlockInfo return blockinfo
-func DeserializeBlockInfo(bi []byte) *BlockInfo {
-	var temp BlockInfo
-	err := json.Unmarshal(bi, &temp)
-	if err != nil {
-		glg.Fatal(err)
-	}
 	return &temp
 }
