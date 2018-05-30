@@ -1,7 +1,6 @@
 package batch_test
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/gizo-network/gizo/cache"
@@ -25,12 +24,12 @@ func TestBatch(t *testing.T) {
 	  return result
 	 }
 	 return 1
-	}`, "Factorial", false, hex.EncodeToString(priv))
+	}`, "Factorial", false, priv)
 	j2, _ := job.NewJob(`
 		func Test(){
 			return "Testing"
 		}
-		`, "Test", false, hex.EncodeToString(priv))
+		`, "Test", false, priv)
 	envs := job.NewEnvVariables(*job.NewEnv("Env", "Anko"), *job.NewEnv("By", "Lobarr"))
 	exec1, err := job.NewExec([]interface{}{10}, 5, job.NORMAL, 0, 0, 0, 0, "", envs, "test")
 	assert.NoError(t, err)
@@ -44,8 +43,8 @@ func TestBatch(t *testing.T) {
 	node2 := merkletree.NewNode(*j2, nil, nil)
 	nodes := []*merkletree.MerkleNode{node1, node2}
 	tree := merkletree.NewMerkleTree(nodes)
-	bc := core.CreateBlockChain("test")
-	block := core.NewBlock(*tree, bc.GetPrevHash(), bc.GetNextHeight(), 10, "test")
+	bc := core.CreateBlockChain("74657374")
+	block := core.NewBlock(*tree, bc.GetPrevHash(), bc.GetNextHeight(), 10, "74657374")
 	bc.AddBlock(block)
 	jr := job.NewJobRequestMultiple(j.GetID(), exec1, exec2, exec3)
 	jr2 := job.NewJobRequestMultiple(j2.GetID(), exec4, exec4, exec4, exec4, exec4)

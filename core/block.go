@@ -61,6 +61,15 @@ func (b *Block) setHeight(h uint64) {
 	b.Height = h
 }
 
+//GetBy returns id of node that mined block
+func (b Block) GetBy() string {
+	return b.By
+}
+
+func (b *Block) setBy(id string) {
+	b.By = id
+}
+
 //NewBlock returns a new block
 func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficulty uint8, by string) *Block {
 	block := &Block{
@@ -128,6 +137,7 @@ func (b *Block) Import(hash string) {
 	b.setHeader(temp.GetHeader())
 	b.setHeight(temp.GetHeight())
 	b.setNodes(temp.GetNodes())
+	b.setBy(temp.GetBy())
 }
 
 //returns the file stats of a blockfile

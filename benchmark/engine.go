@@ -64,7 +64,7 @@ func (b Engine) block(difficulty uint8) *core.Block {
 // Run executes the benchmark engine
 func (b *Engine) run() {
 	// mines blocks from difficulty to when it takes longer than 60 seconds to mine block
-	b.logger.Log("Benchmarking node")
+	b.logger.Log("Benchmark: starting benchmark")
 	done := false
 	close := make(chan struct{})
 	difficulty := 10 //! difficulty starts at 10
@@ -120,7 +120,7 @@ func (b *Engine) run() {
 	score := float64(b.GetData()[len(b.GetData())-1].GetDifficulty()) - 10 //! 10 is subtracted to allow the score start from 1 since difficulty starts at 10
 	scoreDecimal := 1 - b.GetData()[len(b.GetData())-1].GetAvgTime()/100   // determine decimal part of score
 	b.setScore(score + scoreDecimal)
-	b.logger.Info("Benchmark: Benchmark done")
+	b.logger.Info("Benchmark: benchmark done")
 }
 
 //NewEngine returns a Engine with benchmarks run

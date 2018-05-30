@@ -34,8 +34,8 @@ func TestSolo(t *testing.T) {
 	node1 := merkletree.NewNode(*j, nil, nil)
 	nodes := []*merkletree.MerkleNode{node1}
 	tree := merkletree.NewMerkleTree(nodes)
-	bc := core.CreateBlockChain("test")
-	block := core.NewBlock(*tree, bc.GetLatestBlock().GetHeader().GetHash(), bc.GetNextHeight(), 10, "test")
+	bc := core.CreateBlockChain("74657374")
+	block := core.NewBlock(*tree, bc.GetLatestBlock().GetHeader().GetHash(), bc.GetNextHeight(), 10, "74657374")
 	bc.AddBlock(block)
 	s := solo.NewSolo(*job.NewJobRequestSingle(j.GetID(), exec1), bc, pq, cache.NewJobCacheNoWatch(bc))
 	s.Dispatch()

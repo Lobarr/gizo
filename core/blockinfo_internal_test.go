@@ -23,7 +23,7 @@ func TestGetBlock(t *testing.T) {
 		nodes = append(nodes, node)
 	}
 	tree, _ := merkletree.NewMerkleTree(nodes)
-	block := NewBlock(*tree, "00000000000000000000000000000000000000", 1, 10, "test")
+	block := NewBlock(*tree, "00000000000000000000000000000000000000", 1, 10, "74657374")
 	blockinfo := BlockInfo{
 		Header:    block.GetHeader(),
 		Height:    block.GetHeight(),

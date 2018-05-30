@@ -64,6 +64,10 @@ func (p POW) prepareData(nonce int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	byBytes, err := hex.DecodeString(p.block.GetBy())
+	if err != nil {
+		return nil, err
+	}
 	data := bytes.Join(
 		[][]byte{
 			hashBytes,
@@ -72,6 +76,7 @@ func (p POW) prepareData(nonce int) ([]byte, error) {
 			[]byte(strconv.FormatInt(int64(nonce), 10)),
 			[]byte(strconv.FormatInt(int64(p.GetBlock().GetHeight()), 10)),
 			[]byte(strconv.FormatInt(int64(p.GetBlock().GetHeader().GetDifficulty().Int64()), 10)),
+			byBytes,
 		},
 		[]byte{},
 	)

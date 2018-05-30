@@ -19,7 +19,7 @@ import (
 func TestDifficulty(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	core.RemoveDataPath()
-	bc := core.CreateBlockChain("test")
+	bc := core.CreateBlockChain("74657374")
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
@@ -36,7 +36,7 @@ func TestDifficulty(t *testing.T) {
 	assert.NoError(t, err)
 	latest_height, err := bc.GetLatestHeight()
 	assert.NoError(t, err)
-	block := core.NewBlock(*tree, latest_block.GetHeader().GetHash(), uint64(latest_height), 10, "test")
+	block := core.NewBlock(*tree, latest_block.GetHeader().GetHash(), uint64(latest_height), 10, "74657374")
 	bc.AddBlock(block)
 	d10 := benchmark.NewBenchmark(0.0115764096, 10)
 	d11 := benchmark.NewBenchmark(0.13054728, 11)
