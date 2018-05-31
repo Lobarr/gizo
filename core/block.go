@@ -104,9 +104,9 @@ func (b Block) Export() error {
 		return err
 	}
 	if os.Getenv("ENV") == "dev" {
-		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0644))
+		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0755))
 	} else {
-		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0644))
+		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0755))
 	}
 	return err
 }

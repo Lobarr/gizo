@@ -16,9 +16,8 @@ import (
 
 func TestNewBlock(t *testing.T) {
 	os.Setenv("ENV", "dev")
-	InitializeDataPath()
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -39,7 +38,7 @@ func TestNewBlock(t *testing.T) {
 func TestVerifyBlock(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -68,7 +67,7 @@ func TestVerifyBlock(t *testing.T) {
 func TestIsEmpty(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -90,7 +89,7 @@ func TestIsEmpty(t *testing.T) {
 func TestExport(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -110,7 +109,7 @@ func TestExport(t *testing.T) {
 func TestImport(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -137,7 +136,7 @@ func TestImport(t *testing.T) {
 func TestFileStats(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
@@ -157,7 +156,7 @@ func TestFileStats(t *testing.T) {
 func TestDeleteFile(t *testing.T) {
 	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "74657374", false, priv)
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	nodes := []*merkletree.MerkleNode{}
 	for i := 0; i < 16; i++ {
 		node, err := merkletree.NewNode(*j, nil, nil)
