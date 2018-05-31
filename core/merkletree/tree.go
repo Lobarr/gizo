@@ -2,7 +2,6 @@ package merkletree
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/gizo-network/gizo/job"
 )
@@ -77,7 +76,6 @@ func (m *MerkleTree) Build() error {
 			}
 		}
 		m.setRoot(shrink[0].GetHash())
-		fmt.Println(m.GetRoot())
 		shrink = levelUp
 	}
 	return nil
@@ -86,8 +84,6 @@ func (m *MerkleTree) Build() error {
 //VerifyTree returns true if tree is verified
 func (m MerkleTree) VerifyTree() bool {
 	t, _ := NewMerkleTree(m.GetLeafNodes())
-	fmt.Println(t.GetRoot(), len(t.GetLeafNodes()))
-	fmt.Println(m.GetRoot(), len(t.GetLeafNodes()))
 	return t.GetRoot() == m.GetRoot()
 }
 

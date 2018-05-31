@@ -280,7 +280,6 @@ func (bc *BlockChain) iterator() *BlockChainIterator {
 
 //FindJob returns the job from the blockchain
 func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
-	//FIXME: speed up
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
@@ -307,7 +306,6 @@ func (bc *BlockChain) FindJob(id string) (*job.Job, error) {
 
 //FindExec finds exec in the bc
 func (bc *BlockChain) FindExec(id string, hash string) (*job.Exec, error) {
-	//FIXME: speed up
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {
@@ -333,7 +331,6 @@ func (bc *BlockChain) FindExec(id string, hash string) (*job.Exec, error) {
 
 //GetJobExecs returns all execs of a job
 func (bc *BlockChain) GetJobExecs(id string) ([]job.Exec, error) {
-	//FIXME: speed up
 	execs := []job.Exec{}
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
@@ -356,7 +353,6 @@ func (bc *BlockChain) GetJobExecs(id string) ([]job.Exec, error) {
 
 //FindMerkleNode returns the merklenode from the blockchain
 func (bc *BlockChain) FindMerkleNode(h string) (*merkletree.MerkleNode, error) {
-	//FIXME: speed up
 	var tree merkletree.MerkleTree
 	bci := bc.iterator()
 	for {

@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/gizo-network/gizo/cache"
 
 	"github.com/gizo-network/gizo/core"
@@ -20,6 +22,7 @@ type Batch struct {
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
+	logger *glg.Glg
 	result []job.JobRequestMultiple
 	length int
 	status string
@@ -41,6 +44,7 @@ func NewBatch(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 		pq:     pq,
 		jc:     jc,
 		length: length,
+		logger: helpers.Logger(),
 		cancel: make(chan struct{}),
 	}
 
@@ -112,13 +116,12 @@ func (b *Batch) Dispatch() {
 	cancelled := false
 	closeCancel := make(chan struct{})
 	var wg sync.WaitGroup
-	//! watch cancel channel
 	wg.Add(1)
 	go func() {
 		select {
 		case <-b.cancel:
 			cancelled = true
-			glg.Warn("Batch: Cancelling jobs")
+			b.logger.Info("Batch: Cancelling jobs")
 			for _, jr := range b.GetJobs() {
 				for _, exec := range jr.GetExec() {
 					if exec.GetStatus() == job.RUNNING || exec.GetStatus() == job.RETRYING {
@@ -149,7 +152,6 @@ func (b *Batch) Dispatch() {
 			j, err = b.getBC().FindJob(jr.GetID())
 		}
 		if err != nil {
-			glg.Warn("Batch: Unable to find job - " + jr.GetID())
 			for _, exec := range jr.GetExec() {
 				exec.SetErr("Unable to find job - " + jr.GetID())
 			}
@@ -158,7 +160,7 @@ func (b *Batch) Dispatch() {
 				sleepWG.Add(1)
 				go func(ex *job.Exec) {
 					if ex.GetExecutionTime() != 0 {
-						glg.Warn("Batch: Queuing in " + strconv.FormatFloat(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
+						b.logger.Info("Batch: Queuing in " + strconv.FormatFloat(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
 						time.Sleep(time.Nanosecond * time.Duration(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
 					}
 					b.getPQ().Push(*j, ex, results, b.GetCancelChan())

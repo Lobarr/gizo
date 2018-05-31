@@ -1,7 +1,6 @@
 package difficulty_test
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
@@ -31,14 +30,13 @@ func TestDifficulty(t *testing.T) {
 
 	tree, err := merkletree.NewMerkleTree(nodes)
 	assert.NoError(t, err)
-	fmt.Println("passed here")
 	latest_block, err := bc.GetLatestBlock()
 	assert.NoError(t, err)
 	latest_height, err := bc.GetLatestHeight()
 	assert.NoError(t, err)
 	block, err := core.NewBlock(*tree, latest_block.GetHeader().GetHash(), uint64(latest_height), 10, "74657374")
 	assert.NoError(t, err)
-	err = 	err = bc.AddBlock(block) 	assert.NoError(t, err)(block)
+	err = bc.AddBlock(block)
 	assert.NoError(t, err)
 	d10 := benchmark.NewBenchmark(0.0115764096, 10)
 	d11 := benchmark.NewBenchmark(0.13054728, 11)

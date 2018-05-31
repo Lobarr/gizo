@@ -12,7 +12,7 @@ import (
 func TestDeserialize(t *testing.T) {
 	v := p2p.NewVersion(1, 0, []string{})
 	_v := p2p.Version{}
-	err := helpers.Deserialize(v.Serialize(), &_v)
+	err := helpers.Deserialize([]byte("{\"Version\": 1, \"Height\":0, \"Blocks\":[]}"), &_v)
 	assert.NoError(t, err)
 	assert.Equal(t, v.GetBlocks(), _v.GetBlocks())
 	assert.Equal(t, v.GetVersion(), _v.GetVersion())

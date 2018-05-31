@@ -10,10 +10,8 @@ import (
 func InitializeDataPath() {
 	if os.Getenv("ENV") == "dev" {
 		os.MkdirAll(BlockPathDev, os.FileMode(0777))
-		os.MkdirAll(IndexPathDev, os.FileMode(0777))
 	} else {
 		os.MkdirAll(BlockPathProd, os.FileMode(0777))
-		os.MkdirAll(IndexPathProd, os.FileMode(0777))
 	}
 }
 

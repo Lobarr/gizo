@@ -58,7 +58,7 @@ func (p POW) prepareData(nonce int) ([]byte, error) {
 	tree := merkletree.MerkleTree{Root: p.GetBlock().GetHeader().GetMerkleRoot(), LeafNodes: p.GetBlock().GetNodes()}
 	mBytes, err := helpers.Serialize(tree)
 	if err != nil {
-		glg.Fatal(err)
+		p.logger.Fatal(err)
 	}
 	hashBytes, err := hex.DecodeString(p.block.GetHeader().GetPrevBlockHash())
 	if err != nil {
@@ -85,7 +85,6 @@ func (p POW) prepareData(nonce int) ([]byte, error) {
 
 //Run looks for a hash that is less than the current target difficulty
 func (p *POW) run() error {
-	glg.Info("Core: Initiating POW")
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
@@ -109,7 +108,6 @@ func (p *POW) run() error {
 
 //Validate - validates POW
 func (p *POW) Validate() (bool, error) {
-	glg.Info("Core: Validating POW")
 	var hashInt big.Int
 	data, err := p.prepareData(int(p.GetBlock().GetHeader().GetNonce()))
 	if err != nil {

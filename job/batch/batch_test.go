@@ -2,6 +2,7 @@ package batch_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gizo-network/gizo/cache"
 	"github.com/gizo-network/gizo/core"
@@ -39,17 +40,33 @@ func TestBatch(t *testing.T) {
 	assert.NoError(t, err)
 	exec4, err := job.NewExec([]interface{}{}, 5, job.NORMAL, 0, 0, 0, 0, "", envs, "test")
 	assert.NoError(t, err)
-	node1 := merkletree.NewNode(*j, nil, nil)
-	node2 := merkletree.NewNode(*j2, nil, nil)
+	node1, err := merkletree.NewNode(*j, nil, nil)
+	assert.NoError(t, err)
+	node2, err := merkletree.NewNode(*j2, nil, nil)
+	assert.NoError(t, err)
 	nodes := []*merkletree.MerkleNode{node1, node2}
-	tree := merkletree.NewMerkleTree(nodes)
+	tree, err := merkletree.NewMerkleTree(nodes)
+	assert.NoError(t, err)
 	bc := core.CreateBlockChain("74657374")
-	block := core.NewBlock(*tree, bc.GetPrevHash(), bc.GetNextHeight(), 10, "74657374")
-		err = bc.AddBlock(block) 	assert.NoError(t, err)(block)
+	prevHash, err := bc.GetPrevHash()
+	assert.NoError(t, err)
+	nextHeight, err := bc.GetNextHeight()
+	assert.NoError(t, err)
+	block, err := core.NewBlock(*tree, prevHash, nextHeight, 10, "74657374")
+	assert.NoError(t, err)
+	err = bc.AddBlock(block)
+	assert.NoError(t, err)
 	jr := job.NewJobRequestMultiple(j.GetID(), exec1, exec2, exec3)
 	jr2 := job.NewJobRequestMultiple(j2.GetID(), exec4, exec4, exec4, exec4, exec4)
 	batch, err := batch.NewBatch([]job.JobRequestMultiple{*jr, *jr2}, bc, pq, cache.NewJobCacheNoWatch(bc))
 	assert.NoError(t, err)
-	batch.Dispatch()
+	go batch.Dispatch()
+	time.Sleep(time.Second * 2)
+	for i := 0; i < pq.Len(); i++ {
+		item := pq.Pop()
+		exec := item.Job.Execute(item.GetExec(), "test")
+		item.SetExec(exec)
+		item.ResultsChan() <- item
+	}
 	assert.NotNil(t, batch.Result())
 }
