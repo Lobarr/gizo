@@ -28,7 +28,8 @@ var (
 	ErrUnverifiedSignature = errors.New("Signature not verified")
 	//ErrUnableToConvert when args is not able to be converted to string
 	ErrUnableToConvert = errors.New("Unable to convert to string")
-	ErrUnableToSign    = errors.New("Unable to sign job")
+	//ErrUnableToSign unable to sign job
+	ErrUnableToSign = errors.New("Unable to sign job")
 )
 
 //Job holds deployed job
@@ -59,7 +60,11 @@ func UniqJob(jobs []Job) []Job {
 
 //Sign signature of owner of ob
 func (j *Job) Sign(priv string) error {
-	hash := sha256.Sum256([]byte(j.GetTask()))
+	task, err := j.GetTask()
+	if err != nil {
+		return err
+	}
+	hash := sha256.Sum256([]byte(task))
 	privBytes, err := hex.DecodeString(priv)
 	if err != nil {
 		return err
@@ -67,7 +72,7 @@ func (j *Job) Sign(priv string) error {
 	privateKey, _ := x509.ParseECPrivateKey(privBytes)
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
 	if err != nil {
-		glg.Fatal()
+		return err
 	}
 	j.setSignature(hex.EncodeToString(r.Bytes()) + hex.EncodeToString(s.Bytes()))
 	return nil
@@ -77,7 +82,7 @@ func (j *Job) Sign(priv string) error {
 func (j Job) VerifySignature(pub string) (bool, error) {
 	pubBytes, err := hex.DecodeString(pub)
 	if err != nil {
-		glg.Fatal(err)
+		return false, err
 	}
 
 	rBytes, err := hex.DecodeString(j.GetSignature()[:len(j.GetSignature())/2])
@@ -94,7 +99,11 @@ func (j Job) VerifySignature(pub string) (bool, error) {
 	s.SetBytes(sBytes)
 
 	publicKey, _ := x509.ParsePKIXPublicKey(pubBytes)
-	hash := sha256.Sum256([]byte(j.GetTask()))
+	task, err := j.GetTask()
+	if err != nil {
+		return false, err
+	}
+	hash := sha256.Sum256([]byte(task))
 	switch pubConv := publicKey.(type) {
 	case *ecdsa.PublicKey:
 		return ecdsa.Verify(pubConv, hash[:], &r, &s), nil
@@ -113,8 +122,12 @@ func (j *Job) setSubmissionTime(t time.Time) {
 }
 
 //IsEmpty check if job is empty
-func (j Job) IsEmpty() bool {
-	return j.GetID() == "" && j.GetHash() == "" && reflect.ValueOf(j.GetExecs()).IsNil() && j.GetTask() == "" && j.GetSignature() == "" && j.GetName() == ""
+func (j Job) IsEmpty() (bool, error) {
+	task, err := j.GetTask()
+	if err != nil {
+		return false, err
+	}
+	return j.GetID() == "" && j.GetHash() == "" && reflect.ValueOf(j.GetExecs()).IsNil() && task == "" && j.GetSignature() == "" && j.GetName() == "", nil
 }
 
 //NewJob initializes a new job
@@ -172,10 +185,14 @@ func (j *Job) setHash() error {
 	if err != nil {
 		return err
 	}
+	task, err := j.GetTask()
+	if err != nil {
+		return err
+	}
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(j.GetID()),
-			[]byte(j.GetTask()),
+			[]byte(task),
 			[]byte(j.GetName()),
 			rBytes,
 			sBytes,
@@ -199,10 +216,14 @@ func (j Job) Verify() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	task, err := j.GetTask()
+	if err != nil {
+		return false, err
+	}
 	headers := bytes.Join(
 		[][]byte{
 			[]byte(j.GetID()),
-			[]byte(j.GetTask()),
+			[]byte(task),
 			[]byte(j.GetName()),
 			rBytes,
 			sBytes,
@@ -256,12 +277,15 @@ func (j *Job) setSignature(sign string) {
 //AddExec add exec to job
 func (j *Job) AddExec(je Exec) {
 	j.Execs = append(j.Execs, je)
-	j.setHash() //regenerates hash
 }
 
 //GetTask returns task
-func (j Job) GetTask() string {
-	return string(helpers.Decode64(j.Task))
+func (j Job) GetTask() (string, error) {
+	decode, err := helpers.Decode64(j.Task)
+	if err != nil {
+		return "", err
+	}
+	return string(decode), nil
 }
 
 //used to stringify arguments
@@ -270,9 +294,9 @@ func toString(x interface{}) (string, error) {
 	switch v.Kind() {
 	case reflect.Bool:
 		return strconv.FormatBool(v.Bool()), nil
-	case reflect.Int, reflect.Int8, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.FormatInt(v.Int(), 10), nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return strconv.FormatUint(v.Uint(), 10), nil
 	case reflect.Float32, reflect.Float64:
 		return strconv.FormatFloat(v.Float(), 'f', -1, 64), nil
@@ -289,12 +313,12 @@ func toString(x interface{}) (string, error) {
 }
 
 //returns args as string
-func argsStringified(args []interface{}) string {
+func argsStringified(args []interface{}) (string, error) {
 	temp := "("
 	for i, val := range args {
 		stringified, err := toString(val)
 		if err != nil {
-			glg.Fatal(err)
+			return "", err
 		}
 		if i == len(args)-1 {
 			temp += stringified + ""
@@ -302,7 +326,7 @@ func argsStringified(args []interface{}) string {
 			temp += stringified + ","
 		}
 	}
-	return temp + ")"
+	return temp + ")", nil
 }
 
 //Execute runs the exec
@@ -323,12 +347,12 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 	cancelClose := make(chan struct{})
 	timeoutClose := make(chan struct{})
 	execClose := make(chan struct{})
+	done := make(chan string)
+	execute := make(chan struct{})
 	routines := make(map[string]chan struct{})
 	routines["cancel"] = cancelClose
 	routines["timeout"] = timeoutClose
 	routines["exec"] = execClose
-	done := make(chan string)
-	execute := make(chan struct{})
 	exec.SetStatus(RUNNING)
 	exec.SetTimestamp(time.Now().Unix())
 	//! watch for cancellation
@@ -370,13 +394,17 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 			env := anko_vm.NewEnv()
 			anko_core.LoadAllBuiltins(env) //!FIXME: switch to gizo-network/anko
 			envs, err := exec.GetEnvsMap(passphrase)
-			var result interface{}
+			task, err := j.GetTask()
+			var result reflect.Value
 			if err == nil {
 				env.Define("env", envs)
 				if len(exec.GetArgs()) == 0 {
-					result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + "()")
+					result, err = env.Execute(task + "\n" + j.GetName() + "()")
 				} else {
-					result, err = env.Execute(string(helpers.Decode64(j.GetTask())) + "\n" + j.GetName() + argsStringified(exec.GetArgs()))
+					args, err := argsStringified(exec.GetArgs())
+					if err == nil {
+						result, err = env.Execute(task + "\n" + j.GetName() + args)
+					}
 				}
 
 				if r != 0 && err != nil {
@@ -390,7 +418,7 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 			}
 			exec.SetDuration(time.Duration(time.Now().Sub(start).Nanoseconds()))
 			exec.SetErr(err)
-			exec.SetResult(result)
+			exec.SetResult(result.Interface())
 			exec.setHash()
 			exec.SetStatus(FINISHED)
 			done <- "exec"

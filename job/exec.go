@@ -4,17 +4,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
 
 	"github.com/gizo-network/gizo/helpers"
-
-	"github.com/kpango/glg"
 )
 
-//TODO: add environment variables
+//Exec - config for job executions
 type Exec struct {
 	Hash          string
 	Timestamp     int64
@@ -32,10 +29,11 @@ type Exec struct {
 	By            string        //! ID of the worker node that ran this
 	TTL           time.Duration //! time limit of job running
 	Pub           string        //! public key for private jobs
-	Envs          []byte
+	Envs          []byte        //encrypted environment variables
 	cancel        chan struct{}
 }
 
+//NewExec initializes an exec
 func NewExec(args []interface{}, retries, priority int, backoff time.Duration, execTime int64, interval int, ttl time.Duration, pub string, envs EnvironmentVariables, passphrase string) (*Exec, error) {
 	if retries > MaxRetries {
 		return nil, ErrRetriesOutsideLimit
@@ -45,7 +43,10 @@ func NewExec(args []interface{}, retries, priority int, backoff time.Duration, e
 	if err != nil {
 		return nil, err
 	}
-	encryptEnvs := helpers.Encrypt(envsBytes, passphrase)
+	encryptEnvs, err := helpers.Encrypt(envsBytes, passphrase)
+	if err != nil {
+		return nil, err
+	}
 	ex := &Exec{
 		Args:          args,
 		Retries:       retries,
@@ -63,14 +64,17 @@ func NewExec(args []interface{}, retries, priority int, backoff time.Duration, e
 	return ex, nil
 }
 
+//Cancel cancels job
 func (e *Exec) Cancel() {
 	e.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (e Exec) GetCancelChan() chan struct{} {
 	return e.cancel
 }
 
+//GetEnvs returns environment variables
 func (e Exec) GetEnvs(passphrase string) (EnvironmentVariables, error) {
 	d, err := helpers.Decrypt(e.Envs, passphrase)
 	if err != nil {
@@ -84,7 +88,7 @@ func (e Exec) GetEnvs(passphrase string) (EnvironmentVariables, error) {
 	return envs, nil
 }
 
-//returns environment variables as a map
+//GetEnvsMap returns environment variables as a map
 func (e Exec) GetEnvsMap(passphrase string) (map[string]interface{}, error) {
 	temp := make(map[string]interface{})
 	envs, err := e.GetEnvs(passphrase)
@@ -97,26 +101,32 @@ func (e Exec) GetEnvsMap(passphrase string) (map[string]interface{}, error) {
 	return temp, nil
 }
 
+//GetTTL returns ttl
 func (e Exec) GetTTL() time.Duration {
 	return e.TTL
 }
 
+//SetTTL sets ttl
 func (e *Exec) SetTTL(ttl time.Duration) {
 	e.TTL = ttl
 }
 
+//GetInterval returns interval
 func (e Exec) GetInterval() int {
 	return e.Interval
 }
 
+//SetInterval sets interval
 func (e *Exec) SetInterval(i int) {
 	e.Interval = i
 }
 
+//GetPriority returns prioritys
 func (e Exec) GetPriority() int {
 	return e.Priority
 }
 
+//SetPriority sets priority
 func (e *Exec) SetPriority(p int) error {
 	switch p {
 	case HIGH:
@@ -129,11 +139,12 @@ func (e *Exec) SetPriority(p int) error {
 	return nil
 }
 
+//GetExecutionTime returne execution time
 func (e Exec) GetExecutionTime() int64 {
 	return e.ExecutionTime
 }
 
-//? takes unix time
+//SetExecutionTime sets execution time - unix
 func (e *Exec) SetExecutionTime(t int64) error {
 	if time.Now().Unix() > t {
 		return ErrExecutionTimeBehind
@@ -142,10 +153,12 @@ func (e *Exec) SetExecutionTime(t int64) error {
 	return nil
 }
 
+//GetBackoff returns backoff
 func (e Exec) GetBackoff() time.Duration {
 	return e.Backoff
 }
 
+//SetBackoff sets backoff
 func (e *Exec) SetBackoff(b time.Duration) error {
 	if b > MaxRetryBackoff {
 		return ErrRetryDelayOutsideLimit
@@ -154,18 +167,22 @@ func (e *Exec) SetBackoff(b time.Duration) error {
 	return nil
 }
 
+//GetRetriesCount return retries count
 func (e Exec) GetRetriesCount() int {
 	return e.RetriesCount
 }
 
+//IncrRetriesCount increments retries count
 func (e *Exec) IncrRetriesCount() {
 	e.RetriesCount++
 }
 
+//GetRetries return retries
 func (e Exec) GetRetries() int {
 	return e.Retries
 }
 
+//SetRetries sets retries
 func (e *Exec) SetRetries(r int) error {
 	if r > MaxRetries {
 		return ErrRetriesOutsideLimit
@@ -174,34 +191,49 @@ func (e *Exec) SetRetries(r int) error {
 	return nil
 }
 
+//GetStatus returns status
 func (e Exec) GetStatus() string {
 	return e.Status
 }
 
+//SetStatus sets status
 func (e *Exec) SetStatus(s string) {
 	e.Status = s
 }
 
+//GetArgs return args
 func (e Exec) GetArgs() []interface{} {
 	return e.Args
 }
 
+//SetArgs sets args
 func (e *Exec) SetArgs(a []interface{}) {
 	e.Args = a
 }
 
+//GetHash returns hash
 func (e Exec) GetHash() string {
 	return e.Hash
 }
 
-func (e *Exec) setHash() {
-	stringified, err := json.Marshal(e.GetErr())
+func (e *Exec) setHash() error {
+	stringified, err := helpers.Serialize(e.GetErr())
 	if err != nil {
-		glg.Error(err)
+		return err
 	}
-	result, err := json.Marshal(e.GetResult())
+	result, err := helpers.Serialize(e.GetResult())
 	if err != nil {
-		glg.Error(err)
+		return err
+	}
+
+	pub, err := hex.DecodeString(e.getPub())
+	if err != nil {
+		return err
+	}
+
+	worker, err := hex.DecodeString(e.GetBy())
+	if err != nil {
+		return err
 	}
 
 	header := bytes.Join(
@@ -210,6 +242,9 @@ func (e *Exec) setHash() {
 			[]byte(strconv.FormatInt(int64(e.GetDuration()), 10)),
 			stringified,
 			result,
+			e.Envs,
+			pub,
+			worker,
 			[]byte(e.GetBy()),
 		},
 		[]byte{},
@@ -217,44 +252,55 @@ func (e *Exec) setHash() {
 
 	hash := sha256.Sum256(header)
 	e.Hash = hex.EncodeToString(hash[:])
+	return nil
 }
 
+//GetTimestamp return timestamp
 func (e Exec) GetTimestamp() int64 {
 	return e.Timestamp
 }
 
+//SetTimestamp sets timestamp
 func (e *Exec) SetTimestamp(t int64) {
 	e.Timestamp = t
 }
 
+//GetDuration returns duration
 func (e Exec) GetDuration() time.Duration {
 	return e.Duration
 }
 
+//SetDuration sets duration
 func (e *Exec) SetDuration(t time.Duration) {
 	e.Duration = t
 }
 
+//GetErr returns err
 func (e Exec) GetErr() interface{} {
 	return e.Err
 }
 
+//SetErr sets err
 func (e *Exec) SetErr(err interface{}) {
 	e.Err = err
 }
 
+//GetResult returns result
 func (e Exec) GetResult() interface{} {
 	return e.Result
 }
 
+//SetResult sets result
 func (e *Exec) SetResult(r interface{}) {
 	e.Result = r
 }
 
+//GetBy returns by
 func (e Exec) GetBy() string {
 	return e.By
 }
 
+//SetBy sets by
 func (e *Exec) SetBy(by string) {
 	e.By = by
 }

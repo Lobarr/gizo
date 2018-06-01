@@ -29,7 +29,7 @@ const (
 	DefaultPriority = NORMAL
 )
 
-//! priorities
+//Gizo Priorities
 const (
 	BOOST  = 4
 	HIGH   = 3
@@ -38,11 +38,11 @@ const (
 	NORMAL = 0 //! default
 )
 
-//! statuses
+//Gizo Statuses
 const (
-	CANCELLED   = "CANCELLED"  // cancelled by sender
-	QUEUED      = "QUEUED"     // job added to job queue
-	TIMEOUT     = "TIMEOUT"    // job timed out
+	CANCELLED   = "CANCELLED"  //cancelled by sender
+	QUEUED      = "QUEUED"     //job added to job queue
+	TIMEOUT     = "TIMEOUT"    //job timed out
 	RUNNING     = "RUNNING"    //job being executed
 	FINISHED    = "FINISHED"   //job done
 	RETRYING    = "RETRYING"   //job retrying

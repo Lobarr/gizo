@@ -7,8 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
-
-	"github.com/kpango/glg"
 )
 
 //returns md5 hash of key
@@ -19,18 +17,18 @@ func createHash(key string) string {
 }
 
 //Encrypt returns encrypted data
-func Encrypt(data []byte, passphrase string) []byte {
+func Encrypt(data []byte, passphrase string) ([]byte, error) {
 	block, _ := aes.NewCipher([]byte(createHash(passphrase)))
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		glg.Fatal(err)
+		return nil, err
 	}
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-	return ciphertext
+	return ciphertext, nil
 }
 
 //Decrypt returns decrypted data

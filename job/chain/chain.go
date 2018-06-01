@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/gizo-network/gizo/cache"
 
 	"github.com/kpango/glg"
@@ -15,13 +17,14 @@ import (
 	"github.com/gizo-network/gizo/job/queue/qItem"
 )
 
-//Chain - Jobs executed one after the other
+//Chain - jobs executed one after the other
 type Chain struct {
 	jobs   []job.JobRequestMultiple
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
 	result []job.JobRequestMultiple
+	logger *glg.Glg
 	length int
 	status string
 	cancel chan struct{}
@@ -43,6 +46,7 @@ func NewChain(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 		jc:     jc,
 		length: length,
 		cancel: make(chan struct{}),
+		logger: helpers.Logger(),
 	}
 	return c, nil
 }
@@ -118,7 +122,6 @@ func (c *Chain) Dispatch() {
 		select {
 		case <-c.cancel:
 			cancelled = true
-			glg.Warn("Chain: Cancelling jobs")
 			for _, jr := range c.GetJobs() {
 				for _, exec := range jr.GetExec() {
 					if exec.GetStatus() == job.RUNNING || exec.GetStatus() == job.RETRYING {
@@ -146,7 +149,6 @@ func (c *Chain) Dispatch() {
 			j, err = c.getBC().FindJob(jr.GetID())
 		}
 		if err != nil {
-			glg.Warn("Chain: Unable to find job - " + jr.GetID())
 			for _, exec := range jr.GetExec() {
 				exec.SetErr("Unable to find job - " + jr.GetID())
 			}
@@ -164,7 +166,7 @@ func (c *Chain) Dispatch() {
 					}, jr.GetExec()[i], res, c.GetCancelChan()))
 				} else {
 					if jr.GetExec()[i].GetExecutionTime() != 0 {
-						glg.Warn("Chain: Queuing in " + strconv.FormatFloat(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
+						c.logger.Info("Chain: Queuing in " + strconv.FormatFloat(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
 						time.Sleep(time.Nanosecond * time.Duration(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
 					}
 					c.getPQ().Push(*j, jr.GetExec()[i], res, c.GetCancelChan()) //? queues first job

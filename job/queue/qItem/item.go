@@ -1,12 +1,10 @@
 package qItem
 
 import (
-	"encoding/json"
-
 	"github.com/gizo-network/gizo/job"
-	"github.com/kpango/glg"
 )
 
+//Item used for keeping track of execs
 type Item struct {
 	Job     job.Job
 	Exec    *job.Exec
@@ -14,6 +12,7 @@ type Item struct {
 	cancel  chan<- struct{}
 }
 
+//NewItem initializes a new item
 func NewItem(j job.Job, exec *job.Exec, results chan<- Item, cancel chan<- struct{}) Item {
 	return Item{
 		Job:     j,
@@ -23,11 +22,12 @@ func NewItem(j job.Job, exec *job.Exec, results chan<- Item, cancel chan<- struc
 	}
 }
 
+//GetCancel returns cancel channel
 func (i Item) GetCancel() chan<- struct{} {
 	return i.cancel
 }
 
-//sets exec
+//SetExec sets exec
 func (i *Item) SetExec(ex *job.Exec) {
 	i.Exec = ex
 }
@@ -37,7 +37,7 @@ func (i Item) GetExec() *job.Exec {
 	return i.Exec
 }
 
-//GetID returns id
+//GetID returns job id
 func (i Item) GetID() string {
 	return i.Job.GetID()
 }
@@ -50,21 +50,4 @@ func (i Item) GetJob() job.Job {
 //ResultsChan return result chan
 func (i Item) ResultsChan() chan<- Item {
 	return i.results
-}
-
-func (i Item) Serialize() []byte {
-	bytes, err := json.Marshal(i)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return bytes
-}
-
-func DeserializeItem(b []byte) Item {
-	var temp Item
-	err := json.Unmarshal(b, &temp)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
 }

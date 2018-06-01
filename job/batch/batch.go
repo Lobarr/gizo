@@ -16,7 +16,7 @@ import (
 	"github.com/kpango/glg"
 )
 
-//Batch - Jobs executed in parralele
+//Batch - jobs executed in parralel
 type Batch struct {
 	jobs   []job.JobRequestMultiple
 	bc     *core.BlockChain

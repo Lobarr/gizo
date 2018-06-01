@@ -83,8 +83,12 @@ func (n *MerkleNode) IsLeaf() bool {
 }
 
 //IsEmpty check if the merklenode is empty
-func (n *MerkleNode) IsEmpty() bool {
-	return n.Right == nil && n.Left == nil && n.GetJob().IsEmpty() && n.GetHash() == ""
+func (n *MerkleNode) IsEmpty() (bool, error) {
+	empty, err := n.GetJob().IsEmpty()
+	if err != nil {
+		return false, err
+	}
+	return n.Right == nil && n.Left == nil && empty && n.GetHash() == "", nil
 }
 
 //IsEqual check if the input merklenode equals the merklenode calling the function
@@ -112,12 +116,20 @@ func NewNode(j job.Job, lNode, rNode *MerkleNode) (*MerkleNode, error) {
 }
 
 //MergeJobs merges two jobs into one
-func MergeJobs(x, y MerkleNode) job.Job {
+func MergeJobs(x, y MerkleNode) (job.Job, error) {
+	xTask, err := x.GetJob().GetTask()
+	if err != nil {
+		return job.Job{}, err
+	}
+	yTask, err := y.GetJob().GetTask()
+	if err != nil {
+		return job.Job{}, err
+	}
 	return job.Job{
 		ID:        x.GetJob().GetID() + y.GetJob().GetID(),
 		Hash:      x.GetJob().GetHash() + y.GetJob().GetHash(),
 		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),
-		Task:      helpers.Encode64(bytes.Join([][]byte{[]byte(x.GetJob().GetTask()), []byte(y.GetJob().GetTask())}, []byte{})),
+		Task:      helpers.Encode64(bytes.Join([][]byte{[]byte(xTask), []byte(yTask)}, []byte{})),
 		Signature: x.GetJob().GetSignature() + y.GetJob().GetSignature(),
-	}
+	}, nil
 }

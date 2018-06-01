@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	s          = sling.New().Base(CentrumURL).Add("User-Agent", "Gizo Node")
+	s = sling.New().Base(CentrumURL).Add("User-Agent", "Gizo Node")
+	//ErrNoToken occurs when node has not token
 	ErrNoToken = errors.New("Centrum: No token in struct")
 )
 

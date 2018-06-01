@@ -46,6 +46,8 @@ var (
 	ErrJobsFull = errors.New("Jobs array full")
 )
 
+//TODO: verify if job hasn't been modified
+
 type Dispatcher struct {
 	IP        string
 	Port      uint   //port

@@ -127,5 +127,9 @@ func NewMerkleTree(nodes []*MerkleNode) (*MerkleTree, error) {
 
 //merges two nodes
 func merge(left, right MerkleNode) (*MerkleNode, error) {
-	return NewNode(MergeJobs(left, right), &left, &right)
+	job, err := MergeJobs(left, right)
+	if err != nil {
+		return nil, err
+	}
+	return NewNode(job, &left, &right)
 }

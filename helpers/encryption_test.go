@@ -8,13 +8,16 @@ import (
 )
 
 func TestEncrypt(t *testing.T) {
-	assert.NotNil(t, helpers.Encrypt([]byte("test"), "test"))
+	encrypt, err := helpers.Encrypt([]byte("test"), "test")
+	assert.NoError(t, err)
+	assert.NotNil(t, encrypt)
 }
 
 func TestDecrypt(t *testing.T) {
 	test := []byte("test")
 	passphrase := "test"
-	encrypted := helpers.Encrypt(test, passphrase)
+	encrypted, err := helpers.Encrypt(test, passphrase)
+	assert.NoError(t, err)
 	decrypted, err := helpers.Decrypt(encrypted, passphrase)
 	assert.NoError(t, err)
 	assert.Equal(t, decrypted, test)

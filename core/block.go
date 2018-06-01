@@ -123,7 +123,10 @@ func (b *Block) Import(hash string) error {
 	if err != nil {
 		return err //FIXME: handle block doesn't exist by asking peer
 	}
-	bBytes := helpers.Decode64(string(read))
+	bBytes, err := helpers.Decode64(string(read))
+	if err != nil {
+		return err
+	}
 	temp := &Block{}
 	err = helpers.Deserialize(bBytes, &temp)
 	if err != nil {
