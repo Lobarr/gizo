@@ -55,9 +55,9 @@ package batch_test
 // 	assert.NoError(t, err)
 // 	err = bc.AddBlock(block)
 // 	assert.NoError(t, err)
-// 	jr := job.NewJobRequestMultiple(j.GetID(), exec1, exec2, exec3)
-// 	jr2 := job.NewJobRequestMultiple(j2.GetID(), exec4, exec4, exec4)
-// 	batch, err := batch.NewBatch([]job.JobRequestMultiple{*jr, *jr2}, bc, pq, cache.NewJobCacheNoWatch(bc))
+// 	jr := job.NewJobRequest(j.GetID(), exec1, exec2, exec3)
+// 	jr2 := job.NewJobRequest(j2.GetID(), exec4, exec4, exec4)
+// 	batch, err := batch.NewBatch([]job.JobRequest{*jr, *jr2}, bc, pq, cache.NewJobCacheNoWatch(bc))
 // 	assert.NoError(t, err)
 // 	go func() {
 // 		for {

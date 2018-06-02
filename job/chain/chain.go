@@ -19,11 +19,11 @@ import (
 
 //Chain - jobs executed one after the other
 type Chain struct {
-	jobs   []job.JobRequestMultiple
+	jobs   []job.JobRequest
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result []job.JobRequestMultiple
+	result []job.JobRequest
 	logger *glg.Glg
 	length int
 	status string
@@ -31,7 +31,7 @@ type Chain struct {
 }
 
 //NewChain returns chain
-func NewChain(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
+func NewChain(j []job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
 	length := 0
 	for _, jr := range j {
 		length += len(jr.GetExec())
@@ -62,11 +62,11 @@ func (c Chain) GetCancelChan() chan struct{} {
 }
 
 //GetJobs returns jobs
-func (c Chain) GetJobs() []job.JobRequestMultiple {
+func (c Chain) GetJobs() []job.JobRequest {
 	return c.jobs
 }
 
-func (c *Chain) setJobs(j []job.JobRequestMultiple) {
+func (c *Chain) setJobs(j []job.JobRequest) {
 	c.jobs = j
 }
 
@@ -99,12 +99,12 @@ func (c Chain) getJC() *cache.JobCache {
 	return c.jc
 }
 
-func (c *Chain) setResults(res []job.JobRequestMultiple) {
+func (c *Chain) setResults(res []job.JobRequest) {
 	c.result = res
 }
 
 //Result returns result
-func (c Chain) Result() []job.JobRequestMultiple {
+func (c Chain) Result() []job.JobRequest {
 	return c.result
 }
 
@@ -154,12 +154,16 @@ func (c *Chain) Dispatch() {
 			}
 		} else {
 			for i := 0; i < len(jr.GetExec()); i++ {
+				task, err := j.GetTask()
+				if err != nil {
+					jr.GetExec()[i].SetErr(err)
+				}
 				if cancelled == true {
 					results = append(results, qItem.NewItem(job.Job{
 						ID:             j.GetID(),
 						Hash:           j.GetHash(),
 						Name:           j.GetName(),
-						Task:           j.GetTask(),
+						Task:           task,
 						Signature:      j.GetSignature(),
 						SubmissionTime: j.GetSubmissionTime(),
 						Private:        j.GetPrivate(),
@@ -177,9 +181,9 @@ func (c *Chain) Dispatch() {
 	}
 	close(res)
 
-	var grouped []job.JobRequestMultiple
+	var grouped []job.JobRequest
 	for _, jID := range jobIDs {
-		var req job.JobRequestMultiple
+		var req job.JobRequest
 		req.SetID(jID)
 		for _, item := range results {
 			if item.GetID() == jID {

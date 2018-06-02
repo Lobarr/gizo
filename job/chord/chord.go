@@ -18,12 +18,12 @@ import (
 
 //Chord - jobs executed one after the other and the results passed to a callback
 type Chord struct {
-	jobs     []job.JobRequestMultiple
+	jobs     []job.JobRequest
 	bc       *core.BlockChain
 	pq       *queue.JobPriorityQueue
 	jc       *cache.JobCache
-	callback job.JobRequestMultiple
-	result   job.JobRequestMultiple
+	callback job.JobRequest
+	result   job.JobRequest
 	logger   *glg.Glg
 	length   int
 	status   string
@@ -31,7 +31,7 @@ type Chord struct {
 }
 
 //NewChord returns chord
-func NewChord(j []job.JobRequestMultiple, callback job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chord, error) {
+func NewChord(j []job.JobRequest, callback job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chord, error) {
 	//FIXME: count callback execs too
 	length := len(callback.GetExec())
 	for _, jr := range j {
@@ -65,20 +65,20 @@ func (c Chord) GetCancelChan() chan struct{} {
 }
 
 //GetCallback returns callback exec
-func (c Chord) GetCallback() job.JobRequestMultiple {
+func (c Chord) GetCallback() job.JobRequest {
 	return c.callback
 }
 
-func (c *Chord) setCallback(j job.JobRequestMultiple) {
+func (c *Chord) setCallback(j job.JobRequest) {
 	c.callback = j
 }
 
 //GetJobs returns jobs
-func (c Chord) GetJobs() []job.JobRequestMultiple {
+func (c Chord) GetJobs() []job.JobRequest {
 	return c.jobs
 }
 
-func (c *Chord) setJobs(j []job.JobRequestMultiple) {
+func (c *Chord) setJobs(j []job.JobRequest) {
 	c.jobs = j
 }
 
@@ -111,12 +111,12 @@ func (c Chord) getJC() *cache.JobCache {
 	return c.jc
 }
 
-func (c *Chord) setResults(res job.JobRequestMultiple) {
+func (c *Chord) setResults(res job.JobRequest) {
 	c.result = res
 }
 
 //Result returns result
-func (c Chord) Result() job.JobRequestMultiple {
+func (c Chord) Result() job.JobRequest {
 	return c.result
 }
 
@@ -178,11 +178,15 @@ func (c *Chord) Dispatch() {
 		} else {
 			for i := 0; i < len(jr.GetExec()); i++ {
 				if cancelled == true {
+					task, err := j.GetTask()
+					if err != nil {
+						jr.GetExec()[i].SetErr(err)
+					}
 					items = append(items, qItem.NewItem(job.Job{
 						ID:             j.GetID(),
 						Hash:           j.GetHash(),
 						Name:           j.GetName(),
-						Task:           j.GetTask(),
+						Task:           task,
 						Signature:      j.GetSignature(),
 						SubmissionTime: j.GetSubmissionTime(),
 						Private:        j.GetPrivate(),
@@ -221,11 +225,15 @@ func (c *Chord) Dispatch() {
 	} else {
 		for _, exec := range c.GetCallback().GetExec() {
 			if cancelled == true {
+				task, err := cj.GetTask()
+				if err != nil {
+					exec.SetErr(err)
+				}
 				callbackResults = append(callbackResults, qItem.NewItem(job.Job{
 					ID:             cj.GetID(),
 					Hash:           cj.GetHash(),
 					Name:           cj.GetName(),
-					Task:           cj.GetTask(),
+					Task:           task,
 					Signature:      cj.GetSignature(),
 					SubmissionTime: cj.GetSubmissionTime(),
 					Private:        cj.GetPrivate(),
@@ -243,7 +251,7 @@ func (c *Chord) Dispatch() {
 
 	close(callbackChan)
 
-	var callback job.JobRequestMultiple
+	var callback job.JobRequest
 	callback.SetID(c.GetCallback().GetID())
 	for _, item := range callbackResults {
 		callback.AppendExec(item.GetExec())

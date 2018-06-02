@@ -3,9 +3,9 @@ package p2p
 import "errors"
 
 const (
-	NodeDB           = "nodeinfo.db"
+	NodeDB           = "%s.nodeinfo.db" //
 	NodeBucket       = "node"
-	DispatcherScheme = "gizo" //FIXME: use better one
+	DispatcherScheme = "gizo"
 	MaxWorkers       = 128
 	DefaultPort      = 9999
 	CentrumURL       = "https://centrum-dev.herokuapp.com"

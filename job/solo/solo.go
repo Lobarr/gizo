@@ -122,11 +122,15 @@ func (s *Solo) Dispatch() {
 		s.GetJob().GetExec()[0].SetErr("Batch: Unable to find job - " + s.GetJob().GetID())
 	} else {
 		if cancelled == true {
+			task, err := j.GetTask()
+			if err != nil {
+				j.GetExecs()[0].SetErr(err)
+			}
 			result = qItem.NewItem(job.Job{
 				ID:             j.GetID(),
 				Hash:           j.GetHash(),
 				Name:           j.GetName(),
-				Task:           j.GetTask(),
+				Task:           task,
 				Signature:      j.GetSignature(),
 				SubmissionTime: j.GetSubmissionTime(),
 				Private:        j.GetPrivate(),

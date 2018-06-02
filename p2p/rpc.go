@@ -525,7 +525,7 @@ func (d Dispatcher) Solo(jr string) (string, error) {
 
 func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {
@@ -547,7 +547,7 @@ func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 
 func (d Dispatcher) Chain(jrs []string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {
@@ -570,7 +570,7 @@ func (d Dispatcher) Chain(jrs []string) (string, error) {
 
 func (d Dispatcher) Batch(jrs []string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {
