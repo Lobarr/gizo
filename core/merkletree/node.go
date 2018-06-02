@@ -3,43 +3,48 @@ package merkletree
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
-	"reflect"
+	"encoding/hex"
+
+	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/job"
-	"github.com/kpango/glg"
 )
 
 // MerkleNode nodes that make a merkletree
 type MerkleNode struct {
-	Hash  []byte //hash of a job struct
+	Hash  string //hash of a job struct
 	Job   job.Job
 	Left  *MerkleNode
 	Right *MerkleNode
 }
 
 // GetHash returns hash
-func (n MerkleNode) GetHash() []byte {
+func (n MerkleNode) GetHash() string {
 	return n.Hash
 }
 
 // generates hash value of merklenode
-func (n *MerkleNode) setHash() {
-	l, err := n.Left.Serialize()
+func (n *MerkleNode) setHash() error {
+	l, err := helpers.Serialize(n.Left)
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
-	r, err := n.Right.Serialize()
+	r, err := helpers.Serialize(n.Right)
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
 
-	headers := bytes.Join([][]byte{l, r, n.Job.Serialize()}, []byte{})
+	jobBytes, err := helpers.Serialize(n.Job)
 	if err != nil {
-		glg.Fatal(err)
+		return err
+	}
+	headers := bytes.Join([][]byte{l, r, jobBytes}, []byte{})
+	if err != nil {
+		return err
 	}
 	hash := sha256.Sum256(headers)
-	n.Hash = hash[:]
+	n.Hash = hex.EncodeToString(hash[:])
+	return nil
 }
 
 // GetJob returns job
@@ -74,52 +79,57 @@ func (n *MerkleNode) SetRightNode(r MerkleNode) {
 
 //IsLeaf checks if the merklenode is a leaf node
 func (n *MerkleNode) IsLeaf() bool {
-	return n.Left.IsEmpty() && n.Right.IsEmpty()
+	return n.Left == nil && n.Right == nil
 }
 
 //IsEmpty check if the merklenode is empty
-func (n *MerkleNode) IsEmpty() bool {
-	//FIXME: add isempty check for job
-	return reflect.ValueOf(n.Right).IsNil() && reflect.ValueOf(n.Left).IsNil() && n.GetJob().IsEmpty() && reflect.ValueOf(n.Hash).IsNil()
+func (n *MerkleNode) IsEmpty() (bool, error) {
+	empty, err := n.GetJob().IsEmpty()
+	if err != nil {
+		return false, err
+	}
+	return n.Right == nil && n.Left == nil && empty && n.GetHash() == "", nil
 }
 
 //IsEqual check if the input merklenode equals the merklenode calling the function
-func (n MerkleNode) IsEqual(x MerkleNode) bool {
-	nBytes, err := n.Serialize()
+func (n MerkleNode) IsEqual(x MerkleNode) (bool, error) {
+	nBytes, err := helpers.Serialize(n)
 	if err != nil {
-		glg.Fatal(err)
+		return false, err
 	}
-	xBytes, err := x.Serialize()
+	xBytes, err := helpers.Serialize(x)
 	if err != nil {
-		glg.Fatal(err)
+		return false, err
 	}
-	return bytes.Equal(nBytes, xBytes)
-}
-
-//Serialize returns the bytes of a merklenode
-func (n MerkleNode) Serialize() ([]byte, error) {
-	bytes, err := json.Marshal(n)
-	return bytes, err
+	return bytes.Equal(nBytes, xBytes), nil
 }
 
 //NewNode returns a new merklenode
-func NewNode(j job.Job, lNode, rNode *MerkleNode) *MerkleNode {
+func NewNode(j job.Job, lNode, rNode *MerkleNode) (*MerkleNode, error) {
 	n := &MerkleNode{
 		Left:  lNode,
 		Right: rNode,
 		Job:   j,
 	}
-	n.setHash()
-	return n
+	err := n.setHash()
+	return n, err
 }
 
 //MergeJobs merges two jobs into one
-func MergeJobs(x, y MerkleNode) job.Job {
-	return job.Job{
-		ID:        x.GetJob().GetID() + ":" + y.GetJob().GetID(),
-		Hash:      append(x.GetJob().GetHash(), y.GetJob().GetHash()...),
-		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),
-		Task:      x.GetJob().GetTask() + y.GetJob().GetTask(),
-		Signature: append(x.GetJob().GetSignature(), y.GetJob().GetSignature()...),
+func MergeJobs(x, y MerkleNode) (job.Job, error) {
+	xTask, err := x.GetJob().GetTask()
+	if err != nil {
+		return job.Job{}, err
 	}
+	yTask, err := y.GetJob().GetTask()
+	if err != nil {
+		return job.Job{}, err
+	}
+	return job.Job{
+		ID:        x.GetJob().GetID() + y.GetJob().GetID(),
+		Hash:      x.GetJob().GetHash() + y.GetJob().GetHash(),
+		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),
+		Task:      helpers.Encode64(bytes.Join([][]byte{[]byte(xTask), []byte(yTask)}, []byte{})),
+		Signature: x.GetJob().GetSignature() + y.GetJob().GetSignature(),
+	}, nil
 }

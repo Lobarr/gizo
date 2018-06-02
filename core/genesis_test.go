@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/gizo-network/gizo/core"
@@ -8,5 +9,6 @@ import (
 )
 
 func TestGenesis(t *testing.T) {
-	assert.NotNil(t, core.GenesisBlock())
+	os.Setenv("ENV", "dev")
+	assert.NotNil(t, core.GenesisBlock("74657374"))
 }

@@ -1,10 +1,11 @@
 package p2p
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/job/batch"
 
@@ -75,8 +76,17 @@ func (d Dispatcher) Rpc() {
 }
 
 //Version returns nodes version
-func (d Dispatcher) Version() string {
-	return string(NewVersion(GizoVersion, int(d.GetBC().GetLatestHeight()), d.GetBC().GetBlockHashesHex()).Serialize())
+func (d Dispatcher) Version() (string, error) {
+	height, err := d.GetBC().GetLatestHeight()
+	if err != nil {
+		return "", err
+	}
+	hashes, err := d.GetBC().GetBlockHashesHex()
+	if err != nil {
+		return "", err
+	}
+	versionBytes, err := helpers.Serialize(NewVersion(GizoVersion, height, hashes))
+	return string(versionBytes), nil
 }
 
 //PeerCount returns the number of peers a node has
@@ -85,15 +95,15 @@ func (d Dispatcher) PeerCount() int {
 }
 
 func (d Dispatcher) BlockByHash(hash string) (string, error) {
-	hashBytes, err := hex.DecodeString(hash)
+	b, err := d.GetBC().GetBlockInfo(hash)
 	if err != nil {
 		return "", err
 	}
-	b, err := d.GetBC().GetBlockInfo(hashBytes)
+	blockBytes, err := helpers.Serialize(b.GetBlock())
 	if err != nil {
 		return "", err
 	}
-	return string(b.GetBlock().Serialize()), nil
+	return string(blockBytes), nil
 }
 
 func (d Dispatcher) BlockByHeight(height int) (string, error) {
@@ -101,19 +111,35 @@ func (d Dispatcher) BlockByHeight(height int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(b.Serialize()), nil
+	blockBytes, err := helpers.Serialize(b)
+	if err != nil {
+		return "", err
+	}
+	return string(blockBytes), nil
 }
 
 func (d Dispatcher) Latest15Blocks() (string, error) {
-	blocksBytes, err := json.Marshal(d.GetBC().GetLatest15())
+	blocks, err := d.GetBC().GetLatest15()
+	if err != nil {
+		return "", err
+	}
+	blocksBytes, err := helpers.Serialize(blocks)
 	if err != nil {
 		return "", err
 	}
 	return string(blocksBytes), nil
 }
 
-func (d Dispatcher) LatestBlock() string {
-	return string(d.GetBC().GetLatestBlock().Serialize())
+func (d Dispatcher) LatestBlock() (string, error) {
+	block, err := d.GetBC().GetLatestBlock()
+	if err != nil {
+		return "", err
+	}
+	blockBytes, err := helpers.Serialize(block)
+	if err != nil {
+		return "", err
+	}
+	return string(blockBytes), nil
 }
 
 //PendingCount returns number of job waiting to be written to the bc
@@ -147,15 +173,23 @@ func (d Dispatcher) NewJob(task string, name string, priv bool, privKey string) 
 }
 
 func (d Dispatcher) NewExec(args []interface{}, retries, priority int, backoff int64, execTime int64, interval int, ttl int64, pub string, envs string) (string, error) {
-	e, err := job.DeserializeEnvs([]byte(envs))
+	var e job.EnvironmentVariables
+	err := helpers.Deserialize([]byte(envs), &e)
 	if err != nil {
 		return "", err
 	}
-	exec, err := job.NewExec(args, retries, priority, time.Duration(backoff), execTime, interval, time.Duration(ttl), pub, e, d.GetPubString())
+	_backoff := time.Second.Seconds() * float64(backoff)
+	_ttl := time.Minute.Minutes() * float64(ttl)
+
+	exec, err := job.NewExec(args, retries, priority, time.Duration(_backoff), execTime, interval, time.Duration(_ttl), pub, e, d.GetPubString())
 	if err != nil {
 		return "", err
 	}
-	return string(exec.Serialize()), nil
+	execBytes, err := helpers.Serialize(exec)
+	if err != nil {
+		return "", err
+	}
+	return string(execBytes), nil
 }
 
 func (d Dispatcher) WorkersCount() int {
@@ -186,7 +220,7 @@ func (d Dispatcher) WorkersCountNotBusy() int {
 	return temp
 }
 
-func (d Dispatcher) ExecStatus(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecStatus(id string, hash string) (string, error) {
 	if d.GetJobPQ().GetPQ().InQueueHash(hash) {
 		return job.QUEUED, nil
 	} else if worker := d.GetAssignedWorker(hash); worker != nil {
@@ -199,7 +233,7 @@ func (d Dispatcher) ExecStatus(id string, hash []byte) (string, error) {
 	return e.GetStatus(), nil
 }
 
-func (d Dispatcher) CancelExec(hash []byte) error {
+func (d Dispatcher) CancelExec(hash string) error {
 	if worker := d.GetAssignedWorker(hash); worker != nil {
 		worker.Write(CancelMessage(d.GetPrivByte()))
 		return nil
@@ -207,7 +241,7 @@ func (d Dispatcher) CancelExec(hash []byte) error {
 	return errors.New("Exec not running")
 }
 
-func (d Dispatcher) ExecTimestamp(id string, hash []byte) (int64, error) {
+func (d Dispatcher) ExecTimestamp(id string, hash string) (int64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -215,7 +249,7 @@ func (d Dispatcher) ExecTimestamp(id string, hash []byte) (int64, error) {
 	return e.GetTimestamp(), nil
 }
 
-func (d Dispatcher) ExecTimestampString(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecTimestampString(id string, hash string) (string, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -223,7 +257,7 @@ func (d Dispatcher) ExecTimestampString(id string, hash []byte) (string, error) 
 	return time.Unix(e.GetTimestamp(), 0).String(), nil
 }
 
-func (d Dispatcher) ExecDurationNanoseconds(id string, hash []byte) (int64, error) {
+func (d Dispatcher) ExecDurationNanoseconds(id string, hash string) (int64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -231,7 +265,7 @@ func (d Dispatcher) ExecDurationNanoseconds(id string, hash []byte) (int64, erro
 	return e.GetDuration().Nanoseconds(), nil
 }
 
-func (d Dispatcher) ExecDurationSeconds(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecDurationSeconds(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -239,7 +273,7 @@ func (d Dispatcher) ExecDurationSeconds(id string, hash []byte) (float64, error)
 	return e.GetDuration().Seconds(), nil
 }
 
-func (d Dispatcher) ExecDurationMinutes(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecDurationMinutes(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -247,7 +281,7 @@ func (d Dispatcher) ExecDurationMinutes(id string, hash []byte) (float64, error)
 	return e.GetDuration().Minutes(), nil
 }
 
-func (d Dispatcher) ExecDurationString(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecDurationString(id string, hash string) (string, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -255,7 +289,7 @@ func (d Dispatcher) ExecDurationString(id string, hash []byte) (string, error) {
 	return e.GetDuration().String(), nil
 }
 
-func (d Dispatcher) ExecArgs(id string, hash []byte) ([]interface{}, error) {
+func (d Dispatcher) ExecArgs(id string, hash string) ([]interface{}, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return make([]interface{}, 1), err
@@ -263,7 +297,7 @@ func (d Dispatcher) ExecArgs(id string, hash []byte) ([]interface{}, error) {
 	return e.GetArgs(), nil
 }
 
-func (d Dispatcher) ExecErr(id string, hash []byte) (interface{}, error) {
+func (d Dispatcher) ExecErr(id string, hash string) (interface{}, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -271,7 +305,7 @@ func (d Dispatcher) ExecErr(id string, hash []byte) (interface{}, error) {
 	return e.GetErr(), nil
 }
 
-func (d Dispatcher) ExecPriority(id string, hash []byte) (int, error) {
+func (d Dispatcher) ExecPriority(id string, hash string) (int, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -279,7 +313,7 @@ func (d Dispatcher) ExecPriority(id string, hash []byte) (int, error) {
 	return e.GetPriority(), nil
 }
 
-func (d Dispatcher) ExecResult(id string, hash []byte) (interface{}, error) {
+func (d Dispatcher) ExecResult(id string, hash string) (interface{}, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -287,7 +321,7 @@ func (d Dispatcher) ExecResult(id string, hash []byte) (interface{}, error) {
 	return e.GetResult(), nil
 }
 
-func (d Dispatcher) ExecRetries(id string, hash []byte) (int, error) {
+func (d Dispatcher) ExecRetries(id string, hash string) (int, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -295,7 +329,7 @@ func (d Dispatcher) ExecRetries(id string, hash []byte) (int, error) {
 	return e.GetRetries(), nil
 }
 
-func (d Dispatcher) ExecBackoff(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecBackoff(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -303,7 +337,7 @@ func (d Dispatcher) ExecBackoff(id string, hash []byte) (float64, error) {
 	return e.GetBackoff().Seconds(), nil
 }
 
-func (d Dispatcher) ExecExecutionTime(id string, hash []byte) (int64, error) {
+func (d Dispatcher) ExecExecutionTime(id string, hash string) (int64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -311,7 +345,7 @@ func (d Dispatcher) ExecExecutionTime(id string, hash []byte) (int64, error) {
 	return e.GetExecutionTime(), nil
 }
 
-func (d Dispatcher) ExecExecutionTimeString(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecExecutionTimeString(id string, hash string) (string, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -319,7 +353,7 @@ func (d Dispatcher) ExecExecutionTimeString(id string, hash []byte) (string, err
 	return time.Unix(e.GetExecutionTime(), 0).String(), nil
 }
 
-func (d Dispatcher) ExecInterval(id string, hash []byte) (int, error) {
+func (d Dispatcher) ExecInterval(id string, hash string) (int, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -327,7 +361,7 @@ func (d Dispatcher) ExecInterval(id string, hash []byte) (int, error) {
 	return e.GetInterval(), nil
 }
 
-func (d Dispatcher) ExecBy(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecBy(id string, hash string) (string, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -335,7 +369,7 @@ func (d Dispatcher) ExecBy(id string, hash []byte) (string, error) {
 	return e.GetBy(), nil
 }
 
-func (d Dispatcher) ExecTtlNanoseconds(id string, hash []byte) (int64, error) {
+func (d Dispatcher) ExecTtlNanoseconds(id string, hash string) (int64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -343,7 +377,7 @@ func (d Dispatcher) ExecTtlNanoseconds(id string, hash []byte) (int64, error) {
 	return e.GetTTL().Nanoseconds(), nil
 }
 
-func (d Dispatcher) ExecTtlSeconds(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecTtlSeconds(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -351,7 +385,7 @@ func (d Dispatcher) ExecTtlSeconds(id string, hash []byte) (float64, error) {
 	return e.GetTTL().Seconds(), nil
 }
 
-func (d Dispatcher) ExecTtlMinutes(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecTtlMinutes(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -359,7 +393,7 @@ func (d Dispatcher) ExecTtlMinutes(id string, hash []byte) (float64, error) {
 	return e.GetTTL().Minutes(), nil
 }
 
-func (d Dispatcher) ExecTtlHours(id string, hash []byte) (float64, error) {
+func (d Dispatcher) ExecTtlHours(id string, hash string) (float64, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return 0, err
@@ -367,7 +401,7 @@ func (d Dispatcher) ExecTtlHours(id string, hash []byte) (float64, error) {
 	return e.GetTTL().Hours(), nil
 }
 
-func (d Dispatcher) ExecTtlString(id string, hash []byte) (string, error) {
+func (d Dispatcher) ExecTtlString(id string, hash string) (string, error) {
 	e, err := d.GetBC().FindExec(id, hash)
 	if err != nil {
 		return "", err
@@ -379,8 +413,12 @@ func (d Dispatcher) ExecTtlString(id string, hash []byte) (string, error) {
 func (d Dispatcher) JobQueueCount() int {
 	return d.GetJobPQ().Len()
 }
-func (d Dispatcher) LatestBlockHeight() int {
-	return int(d.GetBC().GetLatestBlock().GetHeight())
+func (d Dispatcher) LatestBlockHeight() (int, error) {
+	block, err := d.GetBC().GetLatestBlock()
+	if err != nil {
+		return 0, err
+	}
+	return int(block.GetHeight()), nil
 }
 
 //Job returns a job
@@ -389,7 +427,11 @@ func (d Dispatcher) Job(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(j.Serialize()), nil
+	jBytes, err := helpers.Serialize(j)
+	if err != nil {
+		return "", err
+	}
+	return string(jBytes), nil
 }
 
 func (d Dispatcher) JobSubmisstionTimeUnix(id string) (int64, error) {
@@ -397,7 +439,7 @@ func (d Dispatcher) JobSubmisstionTimeUnix(id string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return j.GetSubmissionTime().Unix(), nil
+	return j.GetSubmissionTime(), nil
 }
 
 func (d Dispatcher) JobSubmisstionTimeString(id string) (string, error) {
@@ -405,7 +447,7 @@ func (d Dispatcher) JobSubmisstionTimeString(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return j.GetSubmissionTime().String(), nil
+	return time.Unix(j.GetSubmissionTime(), 0).String(), nil
 }
 
 func (d Dispatcher) IsJobPrivate(id string) (bool, error) {
@@ -429,11 +471,19 @@ func (d Dispatcher) JobLatestExec(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(j.GetLatestExec().Serialize()), nil
+	jBytes, err := helpers.Serialize(j)
+	if err != nil {
+		return "", err
+	}
+	return string(jBytes), nil
 }
 
 func (d Dispatcher) JobExecs(id string) (string, error) {
-	execsBytes, err := json.Marshal(d.GetBC().GetJobExecs(id))
+	execs, err := d.GetBC().GetJobExecs(id)
+	if err != nil {
+		return "", err
+	}
+	execsBytes, err := helpers.Serialize(execs)
 	if err != nil {
 		return "", err
 	}
@@ -441,17 +491,21 @@ func (d Dispatcher) JobExecs(id string) (string, error) {
 }
 
 //BlockHashesHex returns hashes of all blocks in the bc
-func (d Dispatcher) BlockHashesHex() []string {
-	return d.GetBC().GetBlockHashesHex()
+func (d Dispatcher) BlockHashesHex() ([]string, error) {
+	hashes, err := d.GetBC().GetBlockHashesHex()
+	if err != nil {
+		return []string{}, err
+	}
+	return hashes, nil
 }
 
 //KeyPair returns new pub and priv keypair
 func (d Dispatcher) KeyPair() (string, error) {
 	priv, pub := crypt.GenKeys()
 	temp := make(map[string]string)
-	temp["priv"] = hex.EncodeToString(priv)
-	temp["pub"] = hex.EncodeToString(pub)
-	keysBytes, err := json.Marshal(temp)
+	temp["priv"] = priv
+	temp["pub"] = pub
+	keysBytes, err := helpers.Serialize(temp)
 	if err != nil {
 		return "", err
 	}
@@ -471,7 +525,7 @@ func (d Dispatcher) Solo(jr string) (string, error) {
 
 func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {
@@ -491,9 +545,9 @@ func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 	return string(c.Result().Serialize()), nil
 }
 
-func (d Dispatcher) Chain(jrs []string, callbackJr string) (string, error) {
+func (d Dispatcher) Chain(jrs []string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {
@@ -514,9 +568,9 @@ func (d Dispatcher) Chain(jrs []string, callbackJr string) (string, error) {
 	return string(result), nil
 }
 
-func (d Dispatcher) Batch(jrs []string, callbackJr string) (string, error) {
+func (d Dispatcher) Batch(jrs []string) (string, error) {
 	//TODO: send result to message broker
-	var requests []job.JobRequestMultiple
+	var requests []job.JobRequest
 	for _, jr := range jrs {
 		request, err := job.DeserializeJRM([]byte(jr))
 		if err != nil {

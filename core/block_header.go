@@ -5,11 +5,11 @@ import "math/big"
 //BlockHeader holds the header of the block
 type BlockHeader struct {
 	Timestamp     int64
-	PrevBlockHash []byte
-	MerkleRoot    []byte
+	PrevBlockHash string
+	MerkleRoot    string // hash of merkle root
 	Nonce         uint64
 	Difficulty    *big.Int
-	Hash          []byte
+	Hash          string
 }
 
 //GetTimestamp returns timestamp
@@ -23,22 +23,22 @@ func (bh *BlockHeader) setTimestamp(t int64) {
 }
 
 //GetPrevBlockHash returns previous block hash
-func (bh BlockHeader) GetPrevBlockHash() []byte {
+func (bh BlockHeader) GetPrevBlockHash() string {
 	return bh.PrevBlockHash
 }
 
 //sets prevblockhash
-func (bh *BlockHeader) setPrevBlockHash(h []byte) {
+func (bh *BlockHeader) setPrevBlockHash(h string) {
 	bh.PrevBlockHash = h
 }
 
 //GetMerkleRoot returns merkleroot
-func (bh BlockHeader) GetMerkleRoot() []byte {
+func (bh BlockHeader) GetMerkleRoot() string {
 	return bh.MerkleRoot
 }
 
 //sets merkleroot
-func (bh *BlockHeader) setMerkleRoot(mr []byte) {
+func (bh *BlockHeader) setMerkleRoot(mr string) {
 	bh.MerkleRoot = mr
 }
 
@@ -63,11 +63,11 @@ func (bh *BlockHeader) setDifficulty(d big.Int) {
 }
 
 //GetHash returns hash
-func (bh BlockHeader) GetHash() []byte {
+func (bh BlockHeader) GetHash() string {
 	return bh.Hash
 }
 
 //sets hash
-func (bh *BlockHeader) setHash(h []byte) {
+func (bh *BlockHeader) setHash(h string) {
 	bh.Hash = h
 }

@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/gizo-network/gizo/cache"
 
 	"github.com/gizo-network/gizo/core"
@@ -14,20 +16,21 @@ import (
 	"github.com/kpango/glg"
 )
 
-//Batch - Jobs executed in parralele
+//Batch - jobs executed in parralel
 type Batch struct {
-	jobs   []job.JobRequestMultiple
+	jobs   []job.JobRequest
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result []job.JobRequestMultiple
+	logger *glg.Glg
+	result []job.JobRequest
 	length int
 	status string
 	cancel chan struct{}
 }
 
 //NewBatch returns batch
-func NewBatch(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Batch, error) {
+func NewBatch(j []job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Batch, error) {
 	length := 0
 	for _, jr := range j {
 		length += len(jr.GetExec())
@@ -41,26 +44,29 @@ func NewBatch(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 		pq:     pq,
 		jc:     jc,
 		length: length,
+		logger: helpers.Logger(),
 		cancel: make(chan struct{}),
 	}
 
 	return b, nil
 }
 
+//Cancel terminates batch
 func (b *Batch) Cancel() {
 	b.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (b Batch) GetCancelChan() chan struct{} {
 	return b.cancel
 }
 
 //GetJobs return jobs
-func (b Batch) GetJobs() []job.JobRequestMultiple {
+func (b Batch) GetJobs() []job.JobRequest {
 	return b.jobs
 }
 
-func (b *Batch) setJobs(j []job.JobRequestMultiple) {
+func (b *Batch) setJobs(j []job.JobRequest) {
 	b.jobs = j
 }
 
@@ -93,12 +99,12 @@ func (b Batch) getLength() int {
 	return b.length
 }
 
-func (b *Batch) setResults(res []job.JobRequestMultiple) {
+func (b *Batch) setResults(res []job.JobRequest) {
 	b.result = res
 }
 
 //Result returns result
-func (b Batch) Result() []job.JobRequestMultiple {
+func (b Batch) Result() []job.JobRequest {
 	return b.result
 }
 
@@ -110,13 +116,12 @@ func (b *Batch) Dispatch() {
 	cancelled := false
 	closeCancel := make(chan struct{})
 	var wg sync.WaitGroup
-	//! watch cancel channel
 	wg.Add(1)
 	go func() {
 		select {
 		case <-b.cancel:
 			cancelled = true
-			glg.Warn("Batch: Cancelling jobs")
+			b.logger.Info("Batch: Cancelling jobs")
 			for _, jr := range b.GetJobs() {
 				for _, exec := range jr.GetExec() {
 					if exec.GetStatus() == job.RUNNING || exec.GetStatus() == job.RETRYING {
@@ -147,7 +152,6 @@ func (b *Batch) Dispatch() {
 			j, err = b.getBC().FindJob(jr.GetID())
 		}
 		if err != nil {
-			glg.Warn("Batch: Unable to find job - " + jr.GetID())
 			for _, exec := range jr.GetExec() {
 				exec.SetErr("Unable to find job - " + jr.GetID())
 			}
@@ -156,7 +160,7 @@ func (b *Batch) Dispatch() {
 				sleepWG.Add(1)
 				go func(ex *job.Exec) {
 					if ex.GetExecutionTime() != 0 {
-						glg.Warn("Batch: Queuing in " + strconv.FormatFloat(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
+						b.logger.Info("Batch: Queuing in " + strconv.FormatFloat(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
 						time.Sleep(time.Nanosecond * time.Duration(time.Unix(ex.GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
 					}
 					b.getPQ().Push(*j, ex, results, b.GetCancelChan())
@@ -179,9 +183,9 @@ func (b *Batch) Dispatch() {
 		items = append(items, item)
 	}
 
-	var grouped []job.JobRequestMultiple
+	var grouped []job.JobRequest
 	for _, jID := range jobIDs {
-		var req job.JobRequestMultiple
+		var req job.JobRequest
 		req.SetID(jID)
 		for _, item := range items {
 			if item.GetID() == jID {

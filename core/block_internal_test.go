@@ -1,9 +1,12 @@
 package core
 
 import (
-	"encoding/hex"
 	"fmt"
+	"os"
+	"path"
 	"testing"
+
+	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/core/merkletree"
 	"github.com/gizo-network/gizo/crypt"
@@ -12,16 +15,20 @@ import (
 )
 
 func TestNewBlock(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		assert.NoError(t, err)
+		nodes = append(nodes, node)
+	}
+	tree, err := merkletree.NewMerkleTree(nodes)
+	assert.NoError(t, err)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
 	assert.NotNil(t, testBlock, "returned empty tblock")
 	assert.Equal(t, testBlock.Header.PrevBlockHash, prevHash, "prevhashes don't match")
@@ -29,70 +36,50 @@ func TestNewBlock(t *testing.T) {
 }
 
 func TestVerifyBlock(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, err := merkletree.NewMerkleTree(nodes)
+	assert.NoError(t, err)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
-	assert.True(t, testBlock.VerifyBlock(), "block failed verification")
+	verify, err := testBlock.VerifyBlock()
+	assert.NoError(t, err)
+	assert.True(t, verify, "block failed verification")
 
 	testBlock.Header.setNonce(50)
-	assert.False(t, testBlock.VerifyBlock(), "block passed verification")
-	testBlock.DeleteFile()
-}
-
-func TestSerialize(t *testing.T) {
-	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
-	stringified := testBlock.Serialize()
-	assert.NotEmpty(t, stringified)
-	testBlock.DeleteFile()
-}
-
-func TestDeserializeBlock(t *testing.T) {
-	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
-	stringified := testBlock.Serialize()
-	unmarshaled, err := DeserializeBlock(stringified)
-	confirm := unmarshaled.Serialize()
+	verify, err = testBlock.VerifyBlock()
 	assert.NoError(t, err)
-	assert.Equal(t, stringified, confirm)
+	assert.False(t, verify, "block passed verification")
 	testBlock.DeleteFile()
 }
 
 func TestIsEmpty(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, _ := merkletree.NewMerkleTree(nodes)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	b := Block{}
 	assert.False(t, testBlock.IsEmpty())
 	assert.True(t, b.IsEmpty())
@@ -100,51 +87,89 @@ func TestIsEmpty(t *testing.T) {
 }
 
 func TestExport(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, _ := merkletree.NewMerkleTree(nodes)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 	assert.NotNil(t, testBlock.fileStats().Name())
 	testBlock.DeleteFile()
 }
 
 func TestImport(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, _ := merkletree.NewMerkleTree(nodes)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
 
 	empty := Block{}
 	empty.Import(testBlock.Header.GetHash())
-	testBlockBytes := testBlock.Serialize()
-	emptyBytes := empty.Serialize()
+	testBlockBytes, err := helpers.Serialize(testBlock)
+	assert.NoError(t, err)
+	emptyBytes, err := helpers.Serialize(empty)
+	assert.NoError(t, err)
 	assert.JSONEq(t, string(testBlockBytes), string(emptyBytes))
 	testBlock.DeleteFile()
 }
 
 func TestFileStats(t *testing.T) {
+	os.Setenv("ENV", "dev")
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	nodes := []*merkletree.MerkleNode{node1, node2, node3, node4}
-	tree := merkletree.NewMerkleTree(nodes)
-	prevHash := []byte("00000000000000000000000000000000000000")
-	testBlock := NewBlock(*tree, prevHash, 0, 5, "test")
-	assert.Equal(t, testBlock.fileStats().Name(), fmt.Sprintf(BlockFile, hex.EncodeToString(testBlock.Header.GetHash())))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, _ := merkletree.NewMerkleTree(nodes)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
+	assert.Equal(t, testBlock.fileStats().Name(), fmt.Sprintf(BlockFile, testBlock.Header.GetHash()))
 	testBlock.DeleteFile()
+}
+
+func TestDeleteFile(t *testing.T) {
+	os.Setenv("ENV", "dev")
+	priv, _ := crypt.GenKeys()
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, _ := merkletree.NewMerkleTree(nodes)
+	prevHash := "00000000000000000000000000000000000000"
+	testBlock, err := NewBlock(*tree, prevHash, 0, 5, "74657374")
+	assert.NoError(t, err)
+	testBlock.DeleteFile()
+	_, err = os.Stat(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, testBlock.GetHeader().GetHash())))
+	assert.True(t, os.IsNotExist(err))
 }

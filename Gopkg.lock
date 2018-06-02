@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/Lobarr/lane"
   packages = ["."]
-  revision = "6afd8a931195b273b5d7bf085edd6aee8d9d6496"
-  version = "v1.0.2"
+  revision = "a2777c07f383c8e75750a06b01a73f8f48ddb3f1"
+  version = "v1.0.3"
 
 [[projects]]
   branch = "master"
@@ -95,7 +95,6 @@
   packages = [
     "io",
     "rpc",
-    "rpc/websocket",
     "util"
   ]
   revision = "b2b25423cffe1829254b1e4fbc6f0a7360dd626b"
@@ -259,6 +258,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "14b37c012d424fee1febdd46093b7de7340e01cb077b4db5c217a7837104820c"
+  inputs-digest = "62b907f402e0310dd643e6f2a3b54a04845f8bde47148a6b6134486a7ddd12d0"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -3,9 +3,12 @@ package core
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"math"
 	"math/big"
 	"strconv"
+
+	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/core/merkletree"
 	"github.com/kpango/glg"
@@ -18,6 +21,7 @@ type POW struct {
 	difficulty uint8
 	block      *Block
 	target     *big.Int
+	logger     *glg.Glg
 }
 
 //sets block
@@ -50,34 +54,46 @@ func (p *POW) setDifficulty(d uint8) {
 }
 
 //mergea info and returns it as byttes
-func (p POW) prepareData(nonce int) []byte {
+func (p POW) prepareData(nonce int) ([]byte, error) {
 	tree := merkletree.MerkleTree{Root: p.GetBlock().GetHeader().GetMerkleRoot(), LeafNodes: p.GetBlock().GetNodes()}
-	mBytes, err := tree.Serialize()
+	mBytes, err := helpers.Serialize(tree)
 	if err != nil {
-		glg.Fatal(err)
+		p.logger.Fatal(err)
+	}
+	hashBytes, err := hex.DecodeString(p.block.GetHeader().GetPrevBlockHash())
+	if err != nil {
+		return nil, err
+	}
+	byBytes, err := hex.DecodeString(p.block.GetBy())
+	if err != nil {
+		return nil, err
 	}
 	data := bytes.Join(
 		[][]byte{
-			p.block.GetHeader().GetPrevBlockHash(),
+			hashBytes,
 			[]byte(strconv.FormatInt(p.GetBlock().GetHeader().GetTimestamp(), 10)),
 			mBytes,
 			[]byte(strconv.FormatInt(int64(nonce), 10)),
 			[]byte(strconv.FormatInt(int64(p.GetBlock().GetHeight()), 10)),
 			[]byte(strconv.FormatInt(int64(p.GetBlock().GetHeader().GetDifficulty().Int64()), 10)),
+			byBytes,
 		},
 		[]byte{},
 	)
-	return data
+	return data, nil
 }
 
 //Run looks for a hash that is less than the current target difficulty
-func (p *POW) run() {
-	glg.Info("Core: Initiating POW")
+func (p *POW) run() error {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
 	for nonce < maxNonce {
-		hash = sha256.Sum256(p.prepareData(nonce))
+		data, err := p.prepareData(nonce)
+		if err != nil {
+			return err
+		}
+		hash = sha256.Sum256(data)
 		hashInt.SetBytes(hash[:])
 		if hashInt.Cmp(p.GetTarget()) == -1 {
 			break
@@ -85,18 +101,21 @@ func (p *POW) run() {
 			nonce++
 		}
 	}
-	p.GetBlock().Header.setHash(hash[:])
+	p.GetBlock().Header.setHash(hex.EncodeToString(hash[:]))
 	p.GetBlock().Header.setNonce(uint64(nonce))
+	return nil
 }
 
 //Validate - validates POW
-func (p *POW) Validate() bool {
-	glg.Info("Core: Validating POW")
+func (p *POW) Validate() (bool, error) {
 	var hashInt big.Int
-	data := p.prepareData(int(p.GetBlock().GetHeader().GetNonce()))
+	data, err := p.prepareData(int(p.GetBlock().GetHeader().GetNonce()))
+	if err != nil {
+		return false, err
+	}
 	hash := sha256.Sum256(data)
 	hashInt.SetBytes(hash[:])
-	return hashInt.Cmp(p.GetTarget()) == -1
+	return hashInt.Cmp(p.GetTarget()) == -1, nil
 }
 
 //NewPOW returns POW
@@ -106,6 +125,7 @@ func NewPOW(b *Block) *POW {
 	pow := &POW{
 		target: target,
 		block:  b,
+		logger: helpers.Logger(),
 	}
 	return pow
 }

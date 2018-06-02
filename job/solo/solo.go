@@ -14,18 +14,19 @@ import (
 	"github.com/kpango/glg"
 )
 
-//Solo - Jobs executed one after the other
+//Solo - single job execution
 type Solo struct {
-	jr     job.JobRequestSingle
+	jr     job.JobRequest
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result job.JobRequestSingle
+	result job.JobRequest
 	status string
 	cancel chan struct{}
 }
 
-func NewSolo(jr job.JobRequestSingle, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) *Solo {
+//NewSolo initializes solo
+func NewSolo(jr job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) *Solo {
 	return &Solo{
 		jr: jr,
 		bc: bc,
@@ -34,18 +35,22 @@ func NewSolo(jr job.JobRequestSingle, bc *core.BlockChain, pq *queue.JobPriority
 	}
 }
 
+//Cancel cancels exec
 func (s *Solo) Cancel() {
 	s.cancel <- struct{}{}
 }
 
+//GetCancelChan return cancel channel
 func (s Solo) GetCancelChan() chan struct{} {
 	return s.cancel
 }
 
-func (s Solo) GetJob() job.JobRequestSingle {
+//GetJob returns job request
+func (s Solo) GetJob() job.JobRequest {
 	return s.jr
 }
 
+//GetStatus returns status
 func (s Solo) GetStatus() string {
 	return s.status
 }
@@ -70,12 +75,12 @@ func (s Solo) getBC() *core.BlockChain {
 	return s.bc
 }
 
-func (s *Solo) setResult(res job.JobRequestSingle) {
+func (s *Solo) setResult(res job.JobRequest) {
 	s.result = res
 }
 
 //Result returns result
-func (s Solo) Result() job.JobRequestSingle {
+func (s Solo) Result() job.JobRequest {
 	return s.result
 }
 
@@ -93,11 +98,11 @@ func (s *Solo) Dispatch() {
 		case <-s.cancel:
 			cancelled = true
 			glg.Warn("Solo: Cancelling job")
-			if s.GetJob().GetExec().GetStatus() == job.RUNNING || s.GetJob().GetExec().GetStatus() == job.RETRYING {
-				s.GetJob().GetExec().Cancel()
+			if s.GetJob().GetExec()[0].GetStatus() == job.RUNNING || s.GetJob().GetExec()[0].GetStatus() == job.RETRYING {
+				s.GetJob().GetExec()[0].Cancel()
 			}
-			if s.GetJob().GetExec().GetResult() == nil {
-				s.GetJob().GetExec().SetStatus(job.CANCELLED)
+			if s.GetJob().GetExec()[0].GetResult() == nil {
+				s.GetJob().GetExec()[0].SetStatus(job.CANCELLED)
 			}
 			break
 		case <-closeCancel:
@@ -114,24 +119,28 @@ func (s *Solo) Dispatch() {
 	}
 	if err != nil {
 		glg.Warn("Batch: Unable to find job - " + s.GetJob().GetID())
-		s.GetJob().GetExec().SetErr("Batch: Unable to find job - " + s.GetJob().GetID())
+		s.GetJob().GetExec()[0].SetErr("Batch: Unable to find job - " + s.GetJob().GetID())
 	} else {
 		if cancelled == true {
+			task, err := j.GetTask()
+			if err != nil {
+				j.GetExecs()[0].SetErr(err)
+			}
 			result = qItem.NewItem(job.Job{
 				ID:             j.GetID(),
 				Hash:           j.GetHash(),
 				Name:           j.GetName(),
-				Task:           j.GetTask(),
+				Task:           task,
 				Signature:      j.GetSignature(),
 				SubmissionTime: j.GetSubmissionTime(),
 				Private:        j.GetPrivate(),
-			}, s.GetJob().GetExec(), res, s.GetCancelChan())
+			}, s.GetJob().GetExec()[0], res, s.GetCancelChan())
 		} else {
-			if s.GetJob().GetExec().GetExecutionTime() != 0 {
-				glg.Warn("Chord: Queuing in " + strconv.FormatFloat(time.Unix(s.GetJob().GetExec().GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
-				time.Sleep(time.Nanosecond * time.Duration(time.Unix(s.GetJob().GetExec().GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
+			if s.GetJob().GetExec()[0].GetExecutionTime() != 0 {
+				glg.Warn("Chord: Queuing in " + strconv.FormatFloat(time.Unix(s.GetJob().GetExec()[0].GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
+				time.Sleep(time.Nanosecond * time.Duration(time.Unix(s.GetJob().GetExec()[0].GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
 			}
-			s.getPQ().Push(*j, s.GetJob().GetExec(), res, s.GetCancelChan())
+			s.getPQ().Push(*j, s.GetJob().GetExec()[0], res, s.GetCancelChan())
 			result = <-res
 		}
 	}
@@ -144,5 +153,5 @@ func (s *Solo) Dispatch() {
 		s.setStatus(job.CANCELLED)
 	}
 	wg.Wait()
-	s.setResult(*job.NewJobRequestSingle(result.GetID(), result.GetExec()))
+	s.setResult(*job.NewJobRequest(result.GetID(), result.GetExec()))
 }
