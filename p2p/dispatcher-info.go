@@ -32,6 +32,6 @@ func (d *DispatcherInfo) SetPeers(n []string) {
 }
 
 //AddPeer adds peers
-func (w *DispatcherInfo) AddPeer(n string) {
-	w.Peers = append(w.Peers, n)
+func (d *DispatcherInfo) AddPeer(n string) {
+	d.Peers = append(d.Peers, n)
 }

@@ -19,11 +19,11 @@ import (
 
 //Chain - jobs executed one after the other
 type Chain struct {
-	jobs   []job.JobRequest
+	jobs   []job.Request
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result []job.JobRequest
+	result []job.Request
 	logger *glg.Glg
 	length int
 	status string
@@ -31,7 +31,7 @@ type Chain struct {
 }
 
 //NewChain returns chain
-func NewChain(j []job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
+func NewChain(j []job.Request, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
 	length := 0
 	for _, jr := range j {
 		length += len(jr.GetExec())
@@ -62,11 +62,11 @@ func (c Chain) GetCancelChan() chan struct{} {
 }
 
 //GetJobs returns jobs
-func (c Chain) GetJobs() []job.JobRequest {
+func (c Chain) GetJobs() []job.Request {
 	return c.jobs
 }
 
-func (c *Chain) setJobs(j []job.JobRequest) {
+func (c *Chain) setJobs(j []job.Request) {
 	c.jobs = j
 }
 
@@ -99,12 +99,12 @@ func (c Chain) getJC() *cache.JobCache {
 	return c.jc
 }
 
-func (c *Chain) setResults(res []job.JobRequest) {
+func (c *Chain) setResults(res []job.Request) {
 	c.result = res
 }
 
 //Result returns result
-func (c Chain) Result() []job.JobRequest {
+func (c Chain) Result() []job.Request {
 	return c.result
 }
 
@@ -181,9 +181,9 @@ func (c *Chain) Dispatch() {
 	}
 	close(res)
 
-	var grouped []job.JobRequest
+	var grouped []job.Request
 	for _, jID := range jobIDs {
-		var req job.JobRequest
+		var req job.Request
 		req.SetID(jID)
 		for _, item := range results {
 			if item.GetID() == jID {

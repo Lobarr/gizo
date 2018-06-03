@@ -6,12 +6,18 @@ import (
 )
 
 var (
-	ErrExecNotFound           = errors.New("Exec Not Found")
-	ErrInvalidPriority        = errors.New("Invalid priority number")
-	ErrRetriesOutsideLimit    = errors.New("Retries outside limit")
+	//ErrExecNotFound occurs when exec not found
+	ErrExecNotFound = errors.New("Exec Not Found")
+	//ErrInvalidPriority occurs when invalid priority number
+	ErrInvalidPriority = errors.New("Invalid priority number")
+	//ErrRetriesOutsideLimit occurs when retries outside limit
+	ErrRetriesOutsideLimit = errors.New("Retries outside limit")
+	//ErrRetryDelayOutsideLimit occurs when retry delay is outside limit
 	ErrRetryDelayOutsideLimit = errors.New("Retry Delay outside limit")
-	ErrExecutionTimeBehind    = errors.New("Execution time is past")
-	ErrJobsLenRange           = errors.New("Number of jobs is more than allowed")
+	//ErrExecutionTimeBehind occurs when execution time is past
+	ErrExecutionTimeBehind = errors.New("Execution time is past")
+	//ErrJobsLenRange occurs when number of jobs is more than allowed
+	ErrJobsLenRange = errors.New("Number of jobs is more than allowed")
 )
 
 const (

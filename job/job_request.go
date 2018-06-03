@@ -1,30 +1,35 @@
 package job
 
-//JobRequest requests job exec
-type JobRequest struct {
+//Request requests job execs
+type Request struct {
 	ID    string
 	Execs []*Exec
 }
 
-func NewJobRequest(id string, exec ...*Exec) *JobRequest {
-	return &JobRequest{
+//NewRequest initializes job request
+func NewRequest(id string, exec ...*Exec) *Request {
+	return &Request{
 		ID:    id,
 		Execs: exec,
 	}
 }
 
-func (jr *JobRequest) AppendExec(exec *Exec) {
+//AppendExec adds exec to job request
+func (jr *Request) AppendExec(exec *Exec) {
 	jr.Execs = append(jr.Execs, exec)
 }
 
-func (jr *JobRequest) SetID(id string) {
+//SetID sets job id
+func (jr *Request) SetID(id string) {
 	jr.ID = id
 }
 
-func (jr JobRequest) GetID() string {
+//GetID returns job reqiest id
+func (jr Request) GetID() string {
 	return jr.ID
 }
 
-func (jr JobRequest) GetExec() []*Exec {
+//GetExec returns job execs
+func (jr Request) GetExec() []*Exec {
 	return jr.Execs
 }

@@ -39,7 +39,7 @@ package solo_test
 // 	assert.NoError(t, err)
 // 	err = bc.AddBlock(block)
 // 	assert.NoError(t, err)
-// 	s := solo.NewSolo(*job.NewJobRequestSingle(j.GetID(), exec1), bc, pq, cache.NewJobCacheNoWatch(bc))
+// 	s := solo.NewSolo(*job.NewRequestSingle(j.GetID(), exec1), bc, pq, cache.NewJobCacheNoWatch(bc))
 // 	s.Dispatch()
 // 	assert.NotNil(t, s.Result())
 // }

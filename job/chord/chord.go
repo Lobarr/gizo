@@ -18,12 +18,12 @@ import (
 
 //Chord - jobs executed one after the other and the results passed to a callback
 type Chord struct {
-	jobs     []job.JobRequest
+	jobs     []job.Request
 	bc       *core.BlockChain
 	pq       *queue.JobPriorityQueue
 	jc       *cache.JobCache
-	callback job.JobRequest
-	result   job.JobRequest
+	callback job.Request
+	result   job.Request
 	logger   *glg.Glg
 	length   int
 	status   string
@@ -31,7 +31,7 @@ type Chord struct {
 }
 
 //NewChord returns chord
-func NewChord(j []job.JobRequest, callback job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chord, error) {
+func NewChord(j []job.Request, callback job.Request, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chord, error) {
 	//FIXME: count callback execs too
 	length := len(callback.GetExec())
 	for _, jr := range j {
@@ -65,20 +65,20 @@ func (c Chord) GetCancelChan() chan struct{} {
 }
 
 //GetCallback returns callback exec
-func (c Chord) GetCallback() job.JobRequest {
+func (c Chord) GetCallback() job.Request {
 	return c.callback
 }
 
-func (c *Chord) setCallback(j job.JobRequest) {
+func (c *Chord) setCallback(j job.Request) {
 	c.callback = j
 }
 
 //GetJobs returns jobs
-func (c Chord) GetJobs() []job.JobRequest {
+func (c Chord) GetJobs() []job.Request {
 	return c.jobs
 }
 
-func (c *Chord) setJobs(j []job.JobRequest) {
+func (c *Chord) setJobs(j []job.Request) {
 	c.jobs = j
 }
 
@@ -111,12 +111,12 @@ func (c Chord) getJC() *cache.JobCache {
 	return c.jc
 }
 
-func (c *Chord) setResults(res job.JobRequest) {
+func (c *Chord) setResults(res job.Request) {
 	c.result = res
 }
 
 //Result returns result
-func (c Chord) Result() job.JobRequest {
+func (c Chord) Result() job.Request {
 	return c.result
 }
 
@@ -251,7 +251,7 @@ func (c *Chord) Dispatch() {
 
 	close(callbackChan)
 
-	var callback job.JobRequest
+	var callback job.Request
 	callback.SetID(c.GetCallback().GetID())
 	for _, item := range callbackResults {
 		callback.AppendExec(item.GetExec())

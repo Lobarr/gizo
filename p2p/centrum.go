@@ -30,6 +30,7 @@ type (
 	}
 )
 
+//NewCentrum initlializes centrum
 func NewCentrum() *Centrum {
 	return &Centrum{logger: helpers.Logger()}
 }

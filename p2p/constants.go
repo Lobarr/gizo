@@ -3,13 +3,20 @@ package p2p
 import "errors"
 
 const (
-	NodeDB           = "%s.nodeinfo.db" //
-	NodeBucket       = "node"
+	//NodeDB file name of nodeinfo database
+	NodeDB = "%s.nodeinfo.db"
+	//NodeBucket bolt db bucket
+	NodeBucket = "node"
+	//DispatcherScheme scheme of gizo dispatcher url
 	DispatcherScheme = "gizo"
-	MaxWorkers       = 128
-	DefaultPort      = 9999
-	CentrumURL       = "https://centrum-dev.herokuapp.com"
-	GizoVersion      = 1
+	//MaxWorkers number of workers allowed per standard area
+	MaxWorkers = 128
+	//DefaultPort default port
+	DefaultPort = 9999
+	//CentrumURL url of centrum api
+	CentrumURL = "https://centrum-dev.herokuapp.com"
+	//GizoVersion version of gizo
+	GizoVersion = 1
 )
 
 // node states
@@ -26,5 +33,6 @@ const (
 )
 
 var (
+	//ErrNoDispatchers occurs when there are no dispaters return from centrum
 	ErrNoDispatchers = errors.New("Centrum: no dispatchers available")
 )

@@ -8,6 +8,7 @@ import (
 	"github.com/kpango/glg"
 )
 
+//JobPriorityQueue priority queue of jobs
 type JobPriorityQueue struct {
 	pq     *lane.PQueue
 	logger *glg.Glg

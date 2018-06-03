@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/core"
@@ -18,6 +20,7 @@ import (
 	"github.com/kpango/glg"
 )
 
+//Worker worker node
 type Worker struct {
 	Pub        []byte //public key of the node
 	Dispatcher string
@@ -30,89 +33,110 @@ type Worker struct {
 	busy       bool
 	state      string
 	item       qItem.Item
+	logger     *glg.Glg
 }
 
+//GetItem returns worker item
 func (w Worker) GetItem() qItem.Item {
 	return w.item
 }
 
+//SetItem sets item
 func (w *Worker) SetItem(i qItem.Item) {
 	w.item = i
 }
 
+//GetShortlist returs shortlists
 func (w Worker) GetShortlist() []string {
 	return w.shortlist
 }
 
+//SetShortlist sets shortlists
 func (w *Worker) SetShortlist(s []string) {
 	w.shortlist = s
 }
 
+//GetBusy returns if worker is busy
 func (w Worker) GetBusy() bool {
 	return w.busy
 }
 
+//SetBusy sets busy status
 func (w *Worker) SetBusy(b bool) {
 	w.busy = b
 }
 
-func (w Worker) NodeTypeDispatcher() bool {
-	return false
-}
-
+//GetState returns worker state
 func (w Worker) GetState() string {
 	return w.state
 }
 
+//SetState sets worker state
 func (w *Worker) SetState(s string) {
 	w.state = s
 }
 
+//GetPubByte returns public key as bytes
 func (w Worker) GetPubByte() []byte {
 	return w.Pub
 }
 
+//GetPubString returns public key as string
 func (w Worker) GetPubString() string {
 	return hex.EncodeToString(w.Pub)
 }
 
+//GetPrivByte returns private key as byte
 func (w Worker) GetPrivByte() []byte {
 	return w.priv
 }
 
+//GetPrivString returns private key as string
 func (w Worker) GetPrivString() string {
 	return hex.EncodeToString(w.priv)
 }
 
+//GetUptme returns node uptime
 func (w Worker) GetUptme() int64 {
 	return w.uptime
 }
 
+//GetDispatcher returns connected dispatcher
 func (w Worker) GetDispatcher() string {
 	return w.Dispatcher
 }
 
+//SetDispatcher sets connected dispatcher
 func (w *Worker) SetDispatcher(d string) {
 	w.Dispatcher = d
 }
 
+//GetUptimeString returns uptime as string
 func (w Worker) GetUptimeString() string {
 	return time.Unix(w.uptime, 0).Sub(time.Now()).String()
 }
 
+//Start starts running
 func (w *Worker) Start() {
 	//TODO: implemented cancel and getstatus
 	w.GetDispatchers()
 	w.Connect()
 	go w.WatchInterrupt()
-	w.conn.WriteMessage(websocket.BinaryMessage, HelloMessage(w.GetPubByte()))
+	hm, err := HelloMessage(w.GetPubByte())
+	if err != nil {
+		//FIXME:
+	}
+	w.conn.WriteMessage(websocket.BinaryMessage, hm)
 	for {
 		_, message, err := w.conn.ReadMessage()
 		if err != nil {
-			//TODO: handle dispatcher unexpected disconnect
-			glg.Fatal(err)
+			w.Connect()
 		}
-		m := DeserializePeerMessage(message)
+		var m PeerMessage
+		err = helpers.Deserialize(message, &m)
+		if err != nil {
+			//FIXME:
+		}
 		switch m.GetMessage() {
 		case CONNFULL:
 			w.Disconnect()
@@ -132,31 +156,53 @@ func (w *Worker) Start() {
 				w.SetState(LIVE)
 			}
 			w.SetBusy(true)
-			if m.VerifySignature(w.GetDispatcher()) {
-				w.SetItem(qItem.DeserializeItem(m.GetPayload()))
+			verify, err := m.VerifySignature(w.GetDispatcher())
+			if err != nil {
+				//FIXME:
+			}
+			if verify {
+				var item qItem.Item
+				err = helpers.Deserialize(m.GetPayload(), &item)
+				w.SetItem(item)
 				exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
 				w.item.SetExec(exec)
 				resultBytes, err := helpers.Serialize(w.item.GetExec())
 				if err != nil {
 					//FIXME: handle error
 				}
-				w.conn.WriteMessage(websocket.BinaryMessage, ResultMessage(resultBytes, w.GetPrivByte()))
+				rm, err := ResultMessage(resultBytes, w.GetPrivByte())
+				if err != nil {
+					//FIXME:
+				}
+				w.conn.WriteMessage(websocket.BinaryMessage, rm)
 			} else {
-				w.conn.WriteMessage(websocket.BinaryMessage, InvalidSignature())
+				is, err := InvalidSignature()
+				if err != nil {
+					//FIXME:
+				}
+				w.conn.WriteMessage(websocket.BinaryMessage, is)
 				w.Disconnect()
 			}
 			w.SetBusy(false)
 			break
 		case CANCEL:
 			glg.Info("P2P: job cancelled")
-			if m.VerifySignature(w.GetDispatcher()) {
+			verify, err := m.VerifySignature(w.GetDispatcher())
+			if err != nil {
+				//FIXME:
+			}
+			if verify {
 				w.item.GetExec().Cancel()
 			} else {
-				w.conn.WriteMessage(websocket.BinaryMessage, InvalidSignature())
+				is, err := InvalidSignature()
+				if err != nil {
+					//FIXME:
+				}
+				w.conn.WriteMessage(websocket.BinaryMessage, is)
 			}
 			break
 		case SHUT:
-			//TODO: handle dispatcher shut
+			w.Connect()
 			break
 		case SHUTACK:
 			for {
@@ -177,10 +223,12 @@ func (w *Worker) Start() {
 	}
 }
 
+//Disconnect disconnects from dispatcher
 func (w Worker) Disconnect() {
 	w.conn.Close()
 }
 
+//Connect connects to dispatcher
 func (w *Worker) Connect() {
 	for i, dispatcher := range w.GetShortlist() {
 		addr, err := ParseAddr(dispatcher)
@@ -196,6 +244,7 @@ func (w *Worker) Connect() {
 	w.GetDispatchers()
 }
 
+//Dial attempts ws connections to dispatcher
 func (w *Worker) Dial(url string) error {
 	dailer := websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
@@ -204,20 +253,25 @@ func (w *Worker) Dial(url string) error {
 	}
 	conn, _, err := dailer.Dial(url, nil)
 	if err != nil {
-		glg.Fatal(err)
+		return err
 	}
 	conn.EnableWriteCompression(true)
 	w.conn = conn
 	return nil
 }
 
+//WatchInterrupt watchs for interrupt
 func (w Worker) WatchInterrupt() {
 	select {
 	case i := <-w.interrupt:
 		glg.Warn("Worker: interrupt detected")
 		switch i {
 		case syscall.SIGINT, syscall.SIGTERM:
-			w.conn.WriteMessage(websocket.BinaryMessage, ShutMessage(w.GetPrivByte()))
+			sm, err := ShutMessage(w.GetPrivByte())
+			if err != nil {
+				//FIXME:
+			}
+			w.conn.WriteMessage(websocket.BinaryMessage, sm)
 			break
 		case syscall.SIGQUIT:
 			os.Exit(1)
@@ -225,9 +279,13 @@ func (w Worker) WatchInterrupt() {
 	}
 }
 
+//GetDispatchers connects to centrum to get dispatchers
 func (w *Worker) GetDispatchers() {
 	c := NewCentrum()
-	res := c.GetDispatchers()
+	res, err := c.GetDispatchers()
+	if err != nil {
+		glg.Fatal(err)
+	}
 	shortlist, ok := res["dispatchers"]
 	if !ok {
 		glg.Warn(ErrNoDispatchers)
@@ -236,43 +294,44 @@ func (w *Worker) GetDispatchers() {
 	w.SetShortlist(shortlist.([]string))
 }
 
+//NewWorker initializes worker node
 func NewWorker() *Worker {
 	core.InitializeDataPath()
 	var priv, pub []byte
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	// var dbFile string
-	// if os.Getenv("ENV") == "dev" {
-	// 	dbFile = path.Join(core.IndexPathDev, NodeDB)
-	// } else {
-	// 	dbFile = path.Join(core.IndexPathProd, NodeDB)
-	// }
+	var dbFile string
+	if os.Getenv("ENV") == "dev" {
+		dbFile = path.Join(core.IndexPathDev, fmt.Sprintf(NodeDB, "worker"))
+	} else {
+		dbFile = path.Join(core.IndexPathProd, fmt.Sprintf(NodeDB, "worker"))
+	}
 
-	// if helpers.FileExists(dbFile) {
-	// 	glg.Warn("Worker: using existing keypair")
-	// 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
-	// 	if err != nil {
-	// 		glg.Fatal(err)
-	// 	}
-	// 	err = db.View(func(tx *bolt.Tx) error {
-	// 		b := tx.Bucket([]byte(NodeBucket))
-	// 		priv = b.Get([]byte("priv"))
-	// 		pub = b.Get([]byte("pub"))
-	// 		return nil
-	// 	})
-	// 	if err != nil {
-	// 		glg.Fatal(err)
-	// 	}
-	// return &Worker{
-	// 	Pub:       pub,
-	// 	priv:      priv,
-	// 	uptime:    time.Now().Unix(),
-	// 	interrupt: interrupt,
-	// 	state:     DOWN,
-	// 	shortlist: shortlist.([]string),
-	// }
-	// }
+	if helpers.FileExists(dbFile) {
+		glg.Warn("Worker: using existing keypair")
+		db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
+		if err != nil {
+			glg.Fatal(err)
+		}
+		err = db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(NodeBucket))
+			priv = b.Get([]byte("priv"))
+			pub = b.Get([]byte("pub"))
+			return nil
+		})
+		if err != nil {
+			glg.Fatal(err)
+		}
+		return &Worker{
+			Pub:       pub,
+			priv:      priv,
+			uptime:    time.Now().Unix(),
+			interrupt: interrupt,
+			state:     DOWN,
+			logger:    helpers.Logger(),
+		}
+	}
 	_priv, _pub := crypt.GenKeys()
 	priv, err := hex.DecodeString(_priv)
 	if err != nil {
@@ -282,34 +341,35 @@ func NewWorker() *Worker {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	// db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
-	// if err != nil {
-	// 	glg.Fatal(err)
-	// }
+	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
+	if err != nil {
+		glg.Fatal(err)
+	}
 
-	// err = db.Update(func(tx *bolt.Tx) error {
-	// 	b, err := tx.CreateBucket([]byte(NodeBucket))
-	// 	if err != nil {
-	// 		glg.Fatal(err)
-	// 	}
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte(NodeBucket))
+		if err != nil {
+			glg.Fatal(err)
+		}
 
-	// 	if err = b.Put([]byte("priv"), priv); err != nil {
-	// 		glg.Fatal(err)
-	// 	}
+		if err = b.Put([]byte("priv"), priv); err != nil {
+			glg.Fatal(err)
+		}
 
-	// 	if err = b.Put([]byte("pub"), pub); err != nil {
-	// 		glg.Fatal(err)
-	// 	}
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	glg.Fatal(err)
-	// }
+		if err = b.Put([]byte("pub"), pub); err != nil {
+			glg.Fatal(err)
+		}
+		return nil
+	})
+	if err != nil {
+		glg.Fatal(err)
+	}
 	return &Worker{
 		Pub:       pub,
 		priv:      priv,
 		uptime:    time.Now().Unix(),
 		interrupt: interrupt,
 		state:     DOWN,
+		logger:    helpers.Logger(),
 	}
 }

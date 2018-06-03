@@ -16,17 +16,17 @@ import (
 
 //Solo - single job execution
 type Solo struct {
-	jr     job.JobRequest
+	jr     job.Request
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result job.JobRequest
+	result job.Request
 	status string
 	cancel chan struct{}
 }
 
 //NewSolo initializes solo
-func NewSolo(jr job.JobRequest, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) *Solo {
+func NewSolo(jr job.Request, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) *Solo {
 	return &Solo{
 		jr: jr,
 		bc: bc,
@@ -46,7 +46,7 @@ func (s Solo) GetCancelChan() chan struct{} {
 }
 
 //GetJob returns job request
-func (s Solo) GetJob() job.JobRequest {
+func (s Solo) GetJob() job.Request {
 	return s.jr
 }
 
@@ -75,12 +75,12 @@ func (s Solo) getBC() *core.BlockChain {
 	return s.bc
 }
 
-func (s *Solo) setResult(res job.JobRequest) {
+func (s *Solo) setResult(res job.Request) {
 	s.result = res
 }
 
 //Result returns result
-func (s Solo) Result() job.JobRequest {
+func (s Solo) Result() job.Request {
 	return s.result
 }
 
@@ -153,5 +153,5 @@ func (s *Solo) Dispatch() {
 		s.setStatus(job.CANCELLED)
 	}
 	wg.Wait()
-	s.setResult(*job.NewJobRequest(result.GetID(), result.GetExec()))
+	s.setResult(*job.NewRequest(result.GetID(), result.GetExec()))
 }

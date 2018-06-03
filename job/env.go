@@ -1,6 +1,6 @@
 package job
 
-//EnvironmentVariables stores key and value of env variables
+//EnvironmentVariable stores key and value of env variables
 type EnvironmentVariable struct {
 	Key   string
 	Value string
