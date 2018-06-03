@@ -74,6 +74,8 @@ func (d Dispatcher) RPC() {
 	d.GetRPC().AddFunction("Chord", d.Chord)
 	d.GetRPC().AddFunction("Chain", d.Chain)
 	d.GetRPC().AddFunction("Batch", d.Batch)
+	d.GetRPC().AddFunction("GetUptime", d.GetUptime)
+	d.GetRPC().AddFunction("GetUptimeString", d.GetUptimeString)
 }
 
 //Version returns dispatcher node's version information

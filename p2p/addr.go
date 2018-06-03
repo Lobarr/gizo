@@ -5,8 +5,8 @@ import (
 )
 
 //ParseAddr returns dispatcher url as a map
-func ParseAddr(addr string) (map[string]interface{}, error) {
-	temp := make(map[string]interface{})
+func ParseAddr(addr string) (map[string]string, error) {
+	temp := make(map[string]string)
 	parsed, err := url.Parse(addr)
 	if err != nil {
 		return nil, err

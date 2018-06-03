@@ -235,7 +235,7 @@ func (w *Worker) Connect() {
 		if err == nil {
 			url := fmt.Sprintf("ws://%v:%v/w", addr["ip"], addr["port"])
 			if err = w.Dial(url); err == nil {
-				w.SetDispatcher(addr["pub"].(string))
+				w.SetDispatcher(addr["pub"])
 				return
 			}
 		}

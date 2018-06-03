@@ -884,7 +884,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	}
 	for _, dispatcher := range dispatchers.([]string) {
 		addr, err := ParseAddr(dispatcher)
-		if err == nil && addr["pub"].(string) != d.GetPubString() {
+		if err == nil && addr["pub"] != d.GetPubString() {
 			var v Version
 			wsURL := fmt.Sprintf("ws://%v:%v/d", addr["ip"], addr["port"])
 			versionURL := fmt.Sprintf("http://%v:%v/rpc", addr["ip"], addr["port"])
@@ -898,7 +898,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 				continue
 			}
 			conn.EnableWriteCompression(true)
-			pubBytes, err := hex.DecodeString(addr["pub"].(string))
+			pubBytes, err := hex.DecodeString(addr["pub"])
 			if err != nil {
 				glg.Fatal(err)
 			}
