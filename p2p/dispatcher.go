@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -19,6 +18,7 @@ import (
 	"github.com/Lobarr/lane"
 	upnp "github.com/NebulousLabs/go-upnp"
 	"github.com/hprose/hprose-golang/rpc"
+	rpc_ws "github.com/hprose/hprose-golang/rpc/websocket"
 
 	"github.com/gizo-network/gizo/core/difficulty"
 	"github.com/gizo-network/gizo/core/merkletree"
@@ -47,7 +47,7 @@ var (
 	ErrJobsFull = errors.New("Jobs map full")
 )
 
-//TODO: verify if job hasn't been modified
+//TODO: verify job hasn't been modified
 
 //Dispatcher dispatcher node
 type Dispatcher struct {
@@ -63,7 +63,8 @@ type Dispatcher struct {
 	bench     benchmark.Engine //benchmark of node
 	wWS       *melody.Melody   //workers ws server
 	dWS       *melody.Melody   //dispatchers ws server
-	rpc       *rpc.HTTPService // rpc servce
+	rpcHTTP   *rpc.HTTPService // rpc servce
+	rpcWS     *rpc_ws.WebSocketService
 	router    *mux.Router
 	jc        *cache.JobCache  //job cache
 	bc        *core.BlockChain //blockchain
@@ -99,37 +100,37 @@ func (d Dispatcher) WriteJobs(jobs map[string]job.Job) {
 	for _, job := range jobs {
 		node, err := merkletree.NewNode(job, nil, nil)
 		if err != nil {
-			//FIXME: handle errors
+			glg.Fatal(err)
 		}
 		nodes = append(nodes, node)
 	}
 	tree, err := merkletree.NewMerkleTree(nodes)
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	latestBlock, err := d.GetBC().GetLatestBlock()
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	nextHeight, err := d.GetBC().GetNextHeight()
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	block, err := core.NewBlock(*tree, latestBlock.GetHeader().GetHash(), nextHeight, uint8(difficulty.Difficulty(d.GetBenchmarks(), *d.GetBC())), d.GetPubString())
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	err = d.GetBC().AddBlock(block)
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	blockBytes, err := helpers.Serialize(block)
 	if err != nil {
-		//FIXME: handle error
+		glg.Fatal(err)
 	}
 	bm, err := BlockMessage(blockBytes, d.GetPrivByte())
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	d.BroadcastPeers(bm)
 }
@@ -303,442 +304,28 @@ func (d *Dispatcher) setDWS(m *melody.Melody) {
 	d.dWS = m
 }
 
-//GetRPC returns hprose rpc server
-func (d Dispatcher) GetRPC() *rpc.HTTPService {
-	return d.rpc
+//GetRPCHTTP returns hprose rpc http server
+func (d Dispatcher) GetRPCHTTP() *rpc.HTTPService {
+	return d.rpcHTTP
 }
 
-func (d Dispatcher) setRPC(s *rpc.HTTPService) {
-	d.rpc = s
+func (d Dispatcher) setRPCHTTP(s *rpc.HTTPService) {
+	d.rpcHTTP = s
 }
 
-//BroadcastWorkers sends message to all workers
-func (d Dispatcher) BroadcastWorkers(m []byte) {
-	for s := range d.GetWorkers() {
-		s.Write(m)
-	}
+//GetRPCWS returns hprose rpc ws server
+func (d Dispatcher) GetRPCWS() *rpc_ws.WebSocketService {
+	return d.rpcWS
 }
 
-//BroadcastPeers sends message to all peers
-func (d Dispatcher) BroadcastPeers(m []byte) {
-	for peer := range d.GetPeers() {
-		switch n := peer.(type) {
-		case *melody.Session:
-			n.Write(m)
-			break
-		case *websocket.Conn:
-			n.WriteMessage(websocket.BinaryMessage, m)
-			break
-		}
-	}
-}
-
-//MulticastPeers sends message to specified peers
-func (d Dispatcher) MulticastPeers(m []byte, peers []string) {
-	for peer, info := range d.GetPeers() {
-		if funk.ContainsString(peers, hex.EncodeToString(info.GetPub())) {
-			switch n := peer.(type) {
-			case *melody.Session:
-				n.Write(m)
-				break
-			case *websocket.Conn:
-				n.WriteMessage(websocket.BinaryMessage, m)
-				break
-			}
-		}
-	}
+func (d Dispatcher) setRPCWS(s *rpc_ws.WebSocketService) {
+	d.rpcWS = s
 }
 
 //WorkerExists checks if worker is in node's standard area
 func (d Dispatcher) WorkerExists(s *melody.Session) bool {
 	_, ok := d.workers[s]
 	return ok
-}
-
-//assigns next job in the queue to the next available worker
-func (d *Dispatcher) deployJobs() {
-	for {
-		if d.GetWorkerPQ().getPQ().Empty() == false {
-			if d.GetJobPQ().GetPQ().Empty() == false {
-				d.mu.Lock()
-				w := d.GetWorkerPQ().Pop()
-				if !d.GetWorker(w).GetShut() {
-					j := d.GetJobPQ().Pop()
-					if j.GetExec().GetStatus() != job.CANCELLED {
-						j.GetExec().SetBy(d.GetWorker(w).GetPub())
-						d.GetWorker(w).Assign(&j)
-						glg.Info("P2P: dispatched job")
-						jBytes, err := helpers.Serialize(j)
-						if err != nil {
-							//FIXME:
-						}
-						jm, err := JobMessage(jBytes, d.GetPrivByte())
-						if err != nil {
-							//FIXME:
-						}
-						w.Write(jm)
-					} else {
-						j.ResultsChan() <- j
-					}
-				} else {
-					delete(d.GetWorkers(), w)
-				}
-				d.mu.Unlock()
-			}
-		}
-	}
-}
-
-//communication between dispatcher and worker
-func (d Dispatcher) wPeerTalk() {
-	d.wWS.HandleDisconnect(func(s *melody.Session) {
-		d.mu.Lock()
-		glg.Info("Dispatcher: worker disconnected")
-		if d.GetWorker(s).GetJob() != nil {
-			d.GetJobPQ().PushItem(*d.GetWorker(s).GetJob(), job.BOOST)
-		}
-		d.GetWorker(s).SetShut(true)
-		d.mu.Unlock()
-	})
-	d.wWS.HandleMessageBinary(func(s *melody.Session, message []byte) {
-		var m PeerMessage
-		err := helpers.Deserialize(message, &m)
-		if err != nil {
-			//FIXME:
-		}
-		switch m.GetMessage() {
-		case HELLO:
-			d.mu.Lock()
-			if len(d.GetWorkers()) < MaxWorkers {
-				glg.Info("Dispatcher: worker connected")
-				d.SetWorker(s, NewWorkerInfo(hex.EncodeToString(m.GetPayload())))
-				hm, err := HelloMessage(d.GetPubByte())
-				if err != nil {
-					//FIXME:
-				}
-				s.Write(hm)
-				d.centrum.ConnectWorker()
-				d.GetWorkerPQ().Push(s, 0)
-			} else {
-				cfm, err := ConnFullMessage()
-				if err != nil {
-					//FIXME:
-				}
-				s.Write(cfm)
-			}
-			d.mu.Unlock()
-			break
-		case RESULT:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(d.GetWorker(s).GetPub())
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				glg.Info("P2P: received result")
-				var exec *job.Exec
-				err := helpers.Deserialize(m.GetPayload(), &exec)
-				if err != nil {
-					//FIXME:
-				}
-				d.GetWorker(s).GetJob().SetExec(exec)
-				d.GetWorker(s).GetJob().ResultsChan() <- *d.GetWorker(s).GetJob()
-				j := d.GetWorker(s).GetJob().GetJob()
-				d.GetWorker(s).SetJob(nil)
-				j.AddExec(*exec)
-				//TODO: send to requester's message broker
-				d.AddJob(j)
-			} else {
-				d.GetJobPQ().PushItem(*d.GetWorker(s).GetJob(), job.HIGH)
-			}
-			if !d.GetWorker(s).GetShut() {
-				d.GetWorkerPQ().Push(s, 0)
-			}
-			d.mu.Unlock()
-			break
-		case SHUT:
-			d.mu.Lock()
-			d.GetWorker(s).SetShut(true)
-			sam, err := ShutAckMessage(d.GetPrivByte())
-			if err != nil {
-				//FIXME:
-			}
-			s.Write(sam)
-			d.centrum.DisconnectWorker()
-			d.mu.Unlock()
-			break
-		default:
-			im, err := InvalidMessage()
-			if err != nil {
-				//FIXME:
-			}
-			s.Write(im)
-			break
-		}
-	})
-}
-
-// communication between dispatcher and dispatcher
-func (d Dispatcher) dPeerTalk() {
-	d.dWS.HandleDisconnect(func(s *melody.Session) {
-		d.mu.Lock()
-		info := d.GetPeer(s)
-		if info != nil {
-			glg.Info("Dispatcher: peer disconnected")
-			pdm, err := PeerDisconnectMessage(info.GetPub(), d.GetPrivByte())
-			if err != nil {
-				//FIXME:
-			}
-			d.BroadcastPeers(pdm)
-			delete(d.GetPeers(), s)
-		}
-		d.mu.Unlock()
-	})
-	d.dWS.HandleMessageBinary(func(s *melody.Session, message []byte) {
-		var m PeerMessage
-		err := helpers.Deserialize(message, &m)
-		if err != nil {
-			//FIXME:
-		}
-		switch m.GetMessage() {
-		case HELLO:
-			d.mu.Lock()
-			var info DispatcherInfo
-			err := helpers.Deserialize(m.GetPayload(), &info)
-			if err != nil {
-				//FIXME:
-			}
-			d.AddPeer(s, &DispatcherInfo{Pub: info.GetPub(), Peers: info.GetPeers()})
-			diBytes, err := helpers.Serialize(NewDispatcherInfo(d.GetPubByte(), d.GetPeersPubs()))
-			if err != nil {
-				//FIXME:
-			}
-			hm, err := HelloMessage(diBytes)
-			if err != nil {
-				//FIXME:
-			}
-			s.Write(hm)
-			d.mu.Unlock()
-			break
-		case BLOCK:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), &b)
-				if err != nil {
-					glg.Fatal(err)
-				}
-				err = b.Export()
-				if err != nil {
-					glg.Fatal(err)
-				}
-				d.GetBC().AddBlock(b)
-				var peerToRecv []string
-				for _, info := range d.GetPeers() {
-					//! avoids broadcast storms by not sending block back to sender and to neigbhours that are not directly connected to sender
-					if !funk.ContainsString(info.GetPeers(), hex.EncodeToString(d.GetPeer(s).GetPub())) && bytes.Compare(info.GetPub(), d.GetPeer(s).GetPub()) != 0 {
-						peerToRecv = append(peerToRecv, hex.EncodeToString(info.GetPub()))
-					}
-				}
-				bm, err := BlockMessage(m.GetPayload(), d.GetPrivByte())
-				if err != nil {
-					//FIXME:
-				}
-				d.MulticastPeers(bm, peerToRecv)
-			}
-			d.mu.Unlock()
-			break
-		case BLOCKREQ:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				blockinfo, _ := d.GetBC().GetBlockInfo(hex.EncodeToString(m.GetPayload()))
-				biBytes, err := helpers.Serialize(blockinfo.GetBlock())
-				if err != nil {
-					//FIXME:
-				}
-				brs, err := BlockResMessage(biBytes, d.GetPrivByte())
-				s.Write(brs)
-			}
-			d.mu.Unlock()
-			break
-		case PEERCONNECT:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				d.GetPeer(s).AddPeer(hex.EncodeToString(m.GetPayload()))
-			}
-			d.mu.Unlock()
-			break
-		case PEERDISCONNECT:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(s).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				peers := d.GetPeer(s).GetPeers()
-				for i, peer := range peers {
-					if peer == hex.EncodeToString(m.GetPayload()) {
-						d.GetPeer(s).SetPeers(append(peers[:i], peers[i+1:]...))
-						break
-					}
-				}
-			}
-			d.mu.Unlock()
-			break
-		default:
-			im, err := InvalidMessage()
-			if err != nil {
-				//FIXME:
-			}
-			s.Write(im)
-			break
-		}
-	})
-}
-
-// communication between dispatcher and dispatcher
-func (d Dispatcher) handleNodeConnect(conn *websocket.Conn) {
-	diBytes, err := helpers.Serialize(NewDispatcherInfo(d.GetPubByte(), d.GetPeersPubs()))
-	if err != nil {
-		//FIXME:
-	}
-	hm, err := HelloMessage(diBytes)
-	if err != nil {
-		//FIXME:
-	}
-	conn.WriteMessage(websocket.BinaryMessage, hm)
-	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			//TODO: handle syncer disconnect - use next best version
-			d.mu.Lock()
-			glg.Info("Dispatcher: peer disconnected")
-			info := d.GetPeer(conn)
-			pdm, err := PeerDisconnectMessage(info.GetPub(), d.GetPrivByte())
-			if err != nil {
-				//FIXME:
-			}
-			d.BroadcastPeers(pdm)
-			delete(d.GetPeers(), conn)
-			d.mu.Unlock()
-			break
-		}
-		var m PeerMessage
-		err = helpers.Deserialize(message, &m)
-		if err != nil {
-			//FIXME:
-		}
-		switch m.GetMessage() {
-		case HELLO:
-			d.mu.Lock()
-			var peerInfo DispatcherInfo
-			err := helpers.Deserialize(m.GetPayload(), &peerInfo)
-			if err != nil {
-				//FIXME:
-			}
-			if bytes.Compare(d.GetPeer(conn).GetPub(), peerInfo.GetPub()) == 0 {
-				d.GetPeer(conn).SetPeers(peerInfo.GetPeers())
-			} else {
-				delete(d.GetPeers(), conn)
-				conn.Close()
-			}
-			d.mu.Unlock()
-			break
-		case BLOCK:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), &b)
-				if err != nil {
-					glg.Fatal(err)
-				}
-				err = b.Export()
-				if err != nil {
-					glg.Fatal(err)
-				}
-				d.GetBC().AddBlock(b)
-				var peerToRecv []string
-				for _, info := range d.GetPeers() {
-					//! avoids broadcast storms by not sending block back to sender and to neigbhours that are not directly connected to sender
-					if !funk.ContainsString(info.GetPeers(), hex.EncodeToString(d.GetPeer(conn).GetPub())) && bytes.Compare(info.GetPub(), d.GetPeer(conn).GetPub()) != 0 {
-						peerToRecv = append(peerToRecv, hex.EncodeToString(info.GetPub()))
-					}
-				}
-				bm, err := BlockMessage(m.GetPayload(), d.GetPrivByte())
-				d.MulticastPeers(bm, peerToRecv)
-			}
-			d.mu.Unlock()
-			break
-		case BLOCKRES:
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				var b *core.Block
-				err := helpers.Deserialize(m.GetPayload(), &b)
-				if err != nil {
-					glg.Fatal(err)
-				}
-				err = b.Export()
-				if err != nil {
-					glg.Fatal(err)
-				}
-				d.GetBC().AddBlock(b)
-			}
-			break
-		case PEERCONNECT:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				d.GetPeer(conn).AddPeer(hex.EncodeToString(m.GetPayload()))
-			}
-			d.mu.Unlock()
-			break
-		case PEERDISCONNECT:
-			d.mu.Lock()
-			verify, err := m.VerifySignature(hex.EncodeToString(d.GetPeer(conn).GetPub()))
-			if err != nil {
-				//FIXME:
-			}
-			if verify {
-				peers := d.GetPeer(conn).GetPeers()
-				for i, peer := range peers {
-					if peer == hex.EncodeToString(m.GetPayload()) {
-						d.GetPeer(conn).SetPeers(append(peers[:i], peers[i+1:]...))
-					}
-				}
-			}
-			d.mu.Unlock()
-			break
-		default:
-			im, err := InvalidMessage()
-			if err != nil {
-				//FIXME:
-			}
-			conn.WriteMessage(websocket.BinaryMessage, im)
-			break
-		}
-	}
 }
 
 func (d Dispatcher) watchInterrupt() {
@@ -756,7 +343,7 @@ func (d Dispatcher) watchInterrupt() {
 			}
 			sm, err := ShutMessage(d.GetPrivByte())
 			if err != nil {
-				//FIXME:
+				glg.Fatal(err)
 			}
 			d.BroadcastWorkers(sm)
 			time.Sleep(time.Second * 3) // give neighbors and workers 3 seconds to disconnect
@@ -771,7 +358,7 @@ func (d Dispatcher) watchInterrupt() {
 func (d Dispatcher) Start() {
 	verify, err := d.GetBC().Verify()
 	if err != nil {
-		//FIXME: handle
+		glg.Fatal(err)
 	}
 	if !verify {
 		glg.Fatal("Dispatcher: blockchain not verified")
@@ -798,8 +385,10 @@ func (d Dispatcher) Start() {
 	})
 	d.wPeerTalk()
 	d.dPeerTalk()
-	d.RPC()
-	d.router.Handle("/rpc", d.GetRPC()).Methods("POST")
+	d.RPCHTTP()
+	d.RPCWS()
+	d.router.Handle("/rpc", d.GetRPCHTTP()).Methods("POST")
+	d.router.Handle("/rpc-ws", d.GetRPCWS()).Methods("POST")
 	status := make(map[string]string)
 	status["status"] = "running"
 	status["pub"] = d.GetPubString()
@@ -813,15 +402,15 @@ func (d Dispatcher) Start() {
 	d.router.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		hashes, err := d.GetBC().GetBlockHashesHex()
 		if err != nil {
-			//FIXME:
+			glg.Fatal(err)
 		}
 		height, err := d.GetBC().GetLatestHeight()
 		if err != nil {
-			//FIXME:
+			glg.Fatal(err)
 		}
 		versionBytes, err := helpers.Serialize(NewVersion(GizoVersion, height, hashes))
 		if err != nil {
-			//FIXME:
+			glg.Fatal(err)
 		}
 		w.Write(versionBytes)
 	})
@@ -833,11 +422,9 @@ func (d Dispatcher) Start() {
 	if d.new {
 		go d.Register()
 	} else {
-		res, err := d.centrum.Wake()
-		if err != nil {
-			glg.Fatal(err)
-		} else if res["status"].(string) != "success" {
-			glg.Fatal("Centrum: " + res["status"].(string))
+		res, err := d.centrum.Wake(d.GetPubString(), d.GetIP(), d.GetPort())
+		if err != nil || res["status"].(string) != "success" {
+			d.Register()
 		}
 	}
 	fmt.Println(http.ListenAndServe(":"+strconv.FormatInt(int64(d.GetPort()), 10), d.router))
@@ -861,7 +448,7 @@ func (d Dispatcher) SaveToken() {
 func (d Dispatcher) Register() {
 	time.Sleep(time.Second * 1)
 	if err := d.centrum.NewDisptcher(d.GetPubString(), d.GetIP(), int(d.GetPort())); err != nil {
-		glg.Warn("Centrum: unable to get on network")
+		glg.Warn("Centrum: unable to connect to network")
 		glg.Fatal("Centrum: " + err.Error())
 	}
 	d.SaveToken()
@@ -873,13 +460,14 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	time.Sleep(time.Second * 2)
 	res, err := d.centrum.GetDispatchers()
 	if err != nil {
-		//FIXME:
+		glg.Fatal(err)
 	}
 	syncVersion := new(Version)
 	syncPeer := new(websocket.Conn)
 	dispatchers, ok := res["dispatchers"]
 	if !ok {
 		glg.Warn(ErrNoDispatchers)
+		// d.GetBC().InitGenesisBlock(d.GetPubString())
 		return
 	}
 	for _, dispatcher := range dispatchers.([]string) {
@@ -918,17 +506,17 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 		glg.Warn("Dispatcher: node sync in progress")
 		blocks, err := d.GetBC().GetBlockHashesHex()
 		if err != nil {
-			//FIXME:
+			glg.Fatal(err)
 		}
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
 				hashBytes, err := hex.DecodeString(hash)
 				if err != nil {
-					//FIXME:
+					glg.Fatal(err)
 				}
 				brm, err := BlockReqMessage(hashBytes, d.GetPrivByte())
 				if err != nil {
-					//FIXME:
+					glg.Fatal(err)
 				}
 				syncPeer.WriteMessage(websocket.BinaryMessage, brm)
 			}
@@ -977,7 +565,7 @@ func NewDispatcher(port int) *Dispatcher {
 			var bench *benchmark.Engine
 			err := helpers.Deserialize(b.Get([]byte("benchmark")), &bench)
 			if err != nil {
-				//FIXME:
+				glg.Fatal(err)
 			}
 			//!FIXME: check if token is defined
 			token = string(b.Get([]byte("token")))
@@ -988,6 +576,7 @@ func NewDispatcher(port int) *Dispatcher {
 		}
 		centrum.SetToken(token)
 		bc := core.CreateBlockChain(hex.EncodeToString(pub))
+		// bc.InitGenesisBlock(hex.EncodeToString(pub))
 		jc := cache.NewJobCache(bc)
 		return &Dispatcher{
 			IP:        ip,
@@ -1006,7 +595,8 @@ func NewDispatcher(port int) *Dispatcher {
 			router:    mux.NewRouter(),
 			wWS:       melody.New(),
 			dWS:       melody.New(),
-			rpc:       rpc.NewHTTPService(),
+			rpcHTTP:   rpc.NewHTTPService(),
+			rpcWS:     rpc_ws.NewWebSocketService(),
 			mu:        new(sync.Mutex),
 			interrupt: interrupt,
 			writeQ:    lane.NewQueue(),
@@ -1040,7 +630,7 @@ func NewDispatcher(port int) *Dispatcher {
 
 		benchBytes, err := helpers.Serialize(bench)
 		if err != nil {
-			//FIXME:
+			glg.Fatal(err)
 		}
 		if err = b.Put([]byte("benchmark"), benchBytes); err != nil {
 			glg.Fatal(err)
@@ -1078,7 +668,8 @@ func NewDispatcher(port int) *Dispatcher {
 		router:    mux.NewRouter(),
 		wWS:       melody.New(),
 		dWS:       melody.New(),
-		rpc:       rpc.NewHTTPService(),
+		rpcHTTP:   rpc.NewHTTPService(),
+		rpcWS:     rpc_ws.NewWebSocketService(),
 		mu:        new(sync.Mutex),
 		interrupt: interrupt,
 		writeQ:    lane.NewQueue(),

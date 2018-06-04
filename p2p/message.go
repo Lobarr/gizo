@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
 	"math/big"
 )
 
@@ -66,7 +67,7 @@ func (m *PeerMessage) sign(priv []byte) error {
 	privateKey, _ := x509.ParseECPrivateKey(priv)
 	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
 	if err != nil {
-		return err
+		return errors.New("Unable to sign peer message")
 	}
 	var temp [][]byte
 	temp = append(temp, r.Bytes(), s.Bytes())

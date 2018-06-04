@@ -427,6 +427,11 @@ func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 	return funk.ReverseStrings(hashes), nil
 }
 
+//InitGenesisBlock creates genesis block
+func (bc *BlockChain) InitGenesisBlock(nodeID string) {
+	bc.AddBlock(GenesisBlock(nodeID))
+}
+
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain
 func CreateBlockChain(nodeID string) *BlockChain {
 	logger := helpers.Logger()
@@ -500,7 +505,7 @@ func CreateBlockChain(nodeID string) *BlockChain {
 		logger.Fatal(err)
 	}
 	bc := &BlockChain{
-		tip:    genesisHash,
+		tip:    nil,
 		db:     db,
 		mu:     &sync.RWMutex{},
 		logger: logger,

@@ -33,15 +33,11 @@ func (n *MerkleNode) setHash() error {
 	if err != nil {
 		return err
 	}
-
 	jobBytes, err := helpers.Serialize(n.Job)
 	if err != nil {
 		return err
 	}
 	headers := bytes.Join([][]byte{l, r, jobBytes}, []byte{})
-	if err != nil {
-		return err
-	}
 	hash := sha256.Sum256(headers)
 	n.Hash = hex.EncodeToString(hash[:])
 	return nil

@@ -24,9 +24,10 @@ import (
 type Worker struct {
 	Pub        []byte //public key of the node
 	Dispatcher string
-	shortlist  []string // array of dispatchers received from centrum
-	priv       []byte   //private key of the node
-	uptime     int64    //time since node has been up
+	shortlist  []string        // array of dispatchers received from centrum
+	priv       []byte          //private key of the node
+	uptime     int64           //time since node has been up
+	blacklist  map[string]bool //untrusted nodes
 	conn       *websocket.Conn
 	interrupt  chan os.Signal
 	shutdown   chan struct{}
@@ -118,24 +119,24 @@ func (w Worker) GetUptimeString() string {
 
 //Start starts running
 func (w *Worker) Start() {
-	//TODO: implemented cancel and getstatus
 	w.GetDispatchers()
 	w.Connect()
 	go w.WatchInterrupt()
-	hm, err := HelloMessage(w.GetPubByte())
-	if err != nil {
-		//FIXME:
-	}
+	hm, _ := HelloMessage(w.GetPubByte())
 	w.conn.WriteMessage(websocket.BinaryMessage, hm)
 	for {
 		_, message, err := w.conn.ReadMessage()
 		if err != nil {
 			w.Connect()
+			continue
 		}
 		var m PeerMessage
 		err = helpers.Deserialize(message, &m)
 		if err != nil {
-			//FIXME:
+			// w.Connect()
+			// continue
+			w.Disconnect()
+			fmt.Println(err)
 		}
 		switch m.GetMessage() {
 		case CONNFULL:
@@ -156,32 +157,39 @@ func (w *Worker) Start() {
 				w.SetState(LIVE)
 			}
 			w.SetBusy(true)
+			fmt.Println(m.GetMessage(), m.GetPayload(), m.GetSignature())
 			verify, err := m.VerifySignature(w.GetDispatcher())
 			if err != nil {
-				//FIXME:
+				glg.Fatal(err)
 			}
+			fmt.Println(verify)
 			if verify {
 				var item qItem.Item
 				err = helpers.Deserialize(m.GetPayload(), &item)
+				if err != nil {
+					glg.Fatal(err)
+				}
 				w.SetItem(item)
 				exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
 				w.item.SetExec(exec)
 				resultBytes, err := helpers.Serialize(w.item.GetExec())
 				if err != nil {
-					//FIXME: handle error
+					glg.Fatal(err)
 				}
 				rm, err := ResultMessage(resultBytes, w.GetPrivByte())
 				if err != nil {
-					//FIXME:
+					glg.Fatal(err)
 				}
 				w.conn.WriteMessage(websocket.BinaryMessage, rm)
 			} else {
+				w.blacklist[w.GetDispatcher()] = true
 				is, err := InvalidSignature()
 				if err != nil {
-					//FIXME:
+					glg.Fatal(err)
 				}
 				w.conn.WriteMessage(websocket.BinaryMessage, is)
 				w.Disconnect()
+				w.Connect()
 			}
 			w.SetBusy(false)
 			break
@@ -189,14 +197,15 @@ func (w *Worker) Start() {
 			glg.Info("P2P: job cancelled")
 			verify, err := m.VerifySignature(w.GetDispatcher())
 			if err != nil {
-				//FIXME:
+				glg.Fatal(err)
 			}
 			if verify {
 				w.item.GetExec().Cancel()
 			} else {
+				w.blacklist[w.GetDispatcher()] = true
 				is, err := InvalidSignature()
 				if err != nil {
-					//FIXME:
+					glg.Fatal(err)
 				}
 				w.conn.WriteMessage(websocket.BinaryMessage, is)
 			}
@@ -232,7 +241,8 @@ func (w Worker) Disconnect() {
 func (w *Worker) Connect() {
 	for i, dispatcher := range w.GetShortlist() {
 		addr, err := ParseAddr(dispatcher)
-		if err == nil {
+		_, ok := w.blacklist[addr["pub"]]
+		if err == nil && !ok {
 			url := fmt.Sprintf("ws://%v:%v/w", addr["ip"], addr["port"])
 			if err = w.Dial(url); err == nil {
 				w.SetDispatcher(addr["pub"])
@@ -269,7 +279,7 @@ func (w Worker) WatchInterrupt() {
 		case syscall.SIGINT, syscall.SIGTERM:
 			sm, err := ShutMessage(w.GetPrivByte())
 			if err != nil {
-				//FIXME:
+				glg.Fatal(err)
 			}
 			w.conn.WriteMessage(websocket.BinaryMessage, sm)
 			break
@@ -312,7 +322,7 @@ func NewWorker() *Worker {
 		glg.Warn("Worker: using existing keypair")
 		db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 		if err != nil {
-			glg.Fatal(err)
+			glg.Fatal("Another worker using instance")
 		}
 		err = db.View(func(tx *bolt.Tx) error {
 			b := tx.Bucket([]byte(NodeBucket))
@@ -330,6 +340,7 @@ func NewWorker() *Worker {
 			interrupt: interrupt,
 			state:     DOWN,
 			logger:    helpers.Logger(),
+			blacklist: make(map[string]bool),
 		}
 	}
 	_priv, _pub := crypt.GenKeys()
@@ -371,5 +382,6 @@ func NewWorker() *Worker {
 		interrupt: interrupt,
 		state:     DOWN,
 		logger:    helpers.Logger(),
+		blacklist: make(map[string]bool),
 	}
 }

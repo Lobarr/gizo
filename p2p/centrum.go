@@ -102,13 +102,14 @@ func (c Centrum) DisconnectWorker() (map[string]interface{}, error) {
 }
 
 //Wake changes node status to active in centrum
-func (c Centrum) Wake() (map[string]interface{}, error) {
+func (c Centrum) Wake(pub, ip string, port int) (map[string]interface{}, error) {
 	//TODO: create new worker if wake fails
 	if c.GetToken() == "" {
 		return nil, ErrNoToken
 	}
+	data := DispatcherBody{Pub: pub, IP: ip, Port: port}
 	res := make(map[string]interface{})
-	_, err := s.Patch("/v1/dispatcher/wake").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
+	_, err := s.Patch("/v1/dispatcher/wake").BodyForm(data).Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
 		return nil, err
 	}

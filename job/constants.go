@@ -14,6 +14,8 @@ var (
 	ErrRetriesOutsideLimit = errors.New("Retries outside limit")
 	//ErrRetryDelayOutsideLimit occurs when retry delay is outside limit
 	ErrRetryDelayOutsideLimit = errors.New("Retry Delay outside limit")
+	//ErrBackoffOutsideLimit occurs when backoff duration is outside limit
+	ErrBackoffOutsideLimit = errors.New("Backoff duration outside limit")
 	//ErrExecutionTimeBehind occurs when execution time is past
 	ErrExecutionTimeBehind = errors.New("Execution time is past")
 	//ErrJobsLenRange occurs when number of jobs is more than allowed

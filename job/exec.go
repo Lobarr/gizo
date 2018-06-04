@@ -39,6 +39,10 @@ func NewExec(args []interface{}, retries, priority int, backoff time.Duration, e
 		return nil, ErrRetriesOutsideLimit
 	}
 
+	if backoff.Seconds() > MaxRetryBackoff {
+		return nil, ErrBackoffOutsideLimit
+	}
+
 	envsBytes, err := helpers.Serialize(envs)
 	if err != nil {
 		return nil, err
