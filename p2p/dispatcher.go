@@ -531,7 +531,6 @@ func NewDispatcher(port int) *Dispatcher {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	var bench benchmark.Engine
-	var priv, pub []byte
 	var token string
 	discover, err := upnp.Discover()
 	if err != nil {
@@ -553,6 +552,7 @@ func NewDispatcher(port int) *Dispatcher {
 	}
 
 	if helpers.FileExists(dbFile) {
+		var priv, pub []byte
 		glg.Warn("Dispatcher: using existing keypair and benchmark")
 		db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 		if err != nil {
@@ -607,15 +607,8 @@ func NewDispatcher(port int) *Dispatcher {
 		}
 	}
 
-	_priv, _pub := crypt.GenKeys()
-	priv, err = hex.DecodeString(_priv)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	pub, err = hex.DecodeString(_pub)
-	if err != nil {
-		glg.Fatal(err)
-	}
+	priv, pub := crypt.GenKeysBytes()
+
 	bench = benchmark.NewEngine()
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	if err != nil {

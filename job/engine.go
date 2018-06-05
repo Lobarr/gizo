@@ -58,7 +58,7 @@ func UniqJob(jobs []Job) []Job {
 	return temp
 }
 
-//Sign signature of owner of ob
+//Sign signature of owner of job
 func (j *Job) Sign(priv string) error {
 	task, err := j.GetTask()
 	if err != nil {

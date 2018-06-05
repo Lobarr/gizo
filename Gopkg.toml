@@ -108,3 +108,11 @@
 [[constraint]]
   name = "github.com/hprose/hprose-golang"
   version = "2.0.4"
+
+[[constraint]]
+  branch = "v2"
+  name = "gopkg.in/abiosoft/ishell.v2"
+
+[[constraint]]
+  name = "github.com/abiosoft/ishell"
+  version = "1.0.0"

@@ -1,6 +1,7 @@
 package cli
 
 var (
-	port int
-	env  string
+	port        int
+	env         string
+	interactive bool
 )

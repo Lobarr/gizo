@@ -15,7 +15,7 @@ const (
 	DefaultPort = 9999
 	//CentrumURL url of centrum api
 	// CentrumURL = "https://centrum-dev.herokuapp.com"
-	CentrumURL = "https://ab92c3fb.ngrok.io"
+	CentrumURL = "https://4a71255e.ngrok.io"
 	//GizoVersion version of gizo
 	GizoVersion = 1
 )

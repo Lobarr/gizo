@@ -13,7 +13,7 @@ import (
 //GenKeys returns private and public keys
 func GenKeys() (private string, public string) {
 	logger := helpers.Logger()
-	privKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -26,4 +26,22 @@ func GenKeys() (private string, public string) {
 		logger.Fatal(err)
 	}
 	return hex.EncodeToString(privKeyBytes), hex.EncodeToString(pubKeyBytes)
+}
+
+//GenKeysBytes returns private and public keys as bytes
+func GenKeysBytes() (private []byte, public []byte) {
+	logger := helpers.Logger()
+	privKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	privKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	return privKeyBytes, pubKeyBytes
 }

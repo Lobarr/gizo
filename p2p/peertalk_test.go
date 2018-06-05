@@ -57,7 +57,6 @@ func TestJobMessage(t *testing.T) {
 	var jm p2p.PeerMessage
 	err = helpers.Deserialize(jmBytes, &jm)
 	assert.NoError(t, err)
-	// t.Fatal(jm.GetMessage(), jm.GetPayload(), jm.GetSignature())
 	verify, err := jm.VerifySignature(pub)
 	assert.NoError(t, err)
 	assert.True(t, verify)

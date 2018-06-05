@@ -182,14 +182,15 @@ func (w *Worker) Start() {
 				}
 				w.conn.WriteMessage(websocket.BinaryMessage, rm)
 			} else {
-				w.blacklist[w.GetDispatcher()] = true
-				is, err := InvalidSignature()
-				if err != nil {
-					glg.Fatal(err)
-				}
-				w.conn.WriteMessage(websocket.BinaryMessage, is)
-				w.Disconnect()
-				w.Connect()
+				fmt.Println("unable to verify signature")
+				// w.blacklist[w.GetDispatcher()] = true
+				// is, err := InvalidSignature()
+				// if err != nil {
+				// 	glg.Fatal(err)
+				// }
+				// w.conn.WriteMessage(websocket.BinaryMessage, is)
+				// w.Disconnect()
+				// w.Connect()
 			}
 			w.SetBusy(false)
 			break

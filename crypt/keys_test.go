@@ -12,3 +12,9 @@ func TestGenKeys(t *testing.T) {
 	assert.NotNil(t, priv)
 	assert.NotNil(t, pub)
 }
+
+func TestGenKeysBytes(t *testing.T) {
+	priv, pub := crypt.GenKeysBytes()
+	assert.NotNil(t, priv)
+	assert.NotNil(t, pub)
+}

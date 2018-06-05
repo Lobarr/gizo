@@ -13,6 +13,10 @@ var gizoCmd = &cobra.Command{
 	Version: "1.0.0",
 }
 
+func init() {
+	gizoCmd.PersistentFlags().BoolVarP(&interactive, "interactive", "it", false, "spins up interactive shell")
+}
+
 //Execute boostraps all commands
 func Execute() {
 	gizoCmd.AddCommand(workerCmd, dispatcherCmd, cleardbCmd)

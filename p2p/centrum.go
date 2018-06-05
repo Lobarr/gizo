@@ -13,6 +13,8 @@ var (
 	s = sling.New().Base(CentrumURL).Add("User-Agent", "Gizo Node")
 	//ErrNoToken occurs when node has not token
 	ErrNoToken = errors.New("Centrum: No token in struct")
+	//ErrUnableToConnect occurs when node is unable to connect to centrum
+	ErrUnableToConnect = errors.New("Centrum: Unable to connect to centrum")
 )
 
 type (
@@ -51,7 +53,7 @@ func (c Centrum) GetDispatchers() (map[string]interface{}, error) {
 	temp := make(map[string]interface{})
 	_, err := s.New().Get("/v1/dispatchers").Receive(&dispatchers, &temp)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnableToConnect
 	}
 	if len(dispatchers) != 0 {
 		temp["dispatchers"] = dispatchers
@@ -65,7 +67,7 @@ func (c *Centrum) NewDisptcher(pub, ip string, port int) error {
 	res := make(map[string]interface{})
 	_, err := s.Post("/v1/dispatcher").BodyForm(data).Receive(&res, &res)
 	if err != nil {
-		return err
+		return ErrUnableToConnect
 	}
 	token, ok := res["token"]
 	if !ok {
@@ -83,7 +85,7 @@ func (c Centrum) ConnectWorker() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/connect").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnableToConnect
 	}
 	return res, nil
 }
@@ -96,7 +98,7 @@ func (c Centrum) DisconnectWorker() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/disconnect").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnableToConnect
 	}
 	return res, nil
 }
@@ -111,7 +113,7 @@ func (c Centrum) Wake(pub, ip string, port int) (map[string]interface{}, error) 
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/wake").BodyForm(data).Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnableToConnect
 	}
 	c.logger.Log("Centrum: waking node")
 	return res, nil
@@ -125,7 +127,7 @@ func (c Centrum) Sleep() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/sleep").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		return nil, err
+		return nil, ErrUnableToConnect
 	}
 	c.logger.Log("Centrum: sleeping node")
 	return res, nil
