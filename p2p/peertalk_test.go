@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/gizo-network/gizo/helpers"
-	"github.com/gizo-network/gizo/job/queue/qItem"
+	"github.com/gizo-network/gizo/job/queue/qitem"
 
 	"github.com/gizo-network/gizo/crypt"
 	"github.com/gizo-network/gizo/job"
@@ -46,10 +46,10 @@ func TestJobMessage(t *testing.T) {
 	}`, "Factorial", false, priv)
 	assert.NoError(t, err)
 	assert.NotNil(t, pub)
-	res := make(chan qItem.Item)
+	res := make(chan qitem.Item)
 	envs := job.NewEnvVariables(*job.NewEnv("Env", "Anko"), *job.NewEnv("By", "Lobarr"))
 	exec, err := job.NewExec([]interface{}{2}, 5, job.NORMAL, 0, 0, 0, 0, pub, envs, "test")
-	item := qItem.NewItem(*j, exec, res, exec.GetCancelChan())
+	item := qitem.NewItem(*j, exec, res, exec.GetCancelChan())
 	itemBytes, err := helpers.Serialize(item)
 	assert.NoError(t, err)
 	jmBytes, err := p2p.JobMessage(itemBytes, privBytes)

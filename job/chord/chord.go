@@ -12,7 +12,7 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
-	"github.com/gizo-network/gizo/job/queue/qItem"
+	"github.com/gizo-network/gizo/job/queue/qitem"
 	"github.com/kpango/glg"
 )
 
@@ -123,8 +123,8 @@ func (c Chord) Result() job.Request {
 //Dispatch executes the chord
 func (c *Chord) Dispatch() {
 	c.setStatus(job.RUNNING)
-	var items []qItem.Item // used to hold results
-	resChan := make(chan qItem.Item)
+	var items []qitem.Item // used to hold results
+	resChan := make(chan qitem.Item)
 	cancelled := false
 	closeCancel := make(chan struct{})
 	var wg sync.WaitGroup
@@ -182,7 +182,7 @@ func (c *Chord) Dispatch() {
 					if err != nil {
 						jr.GetExec()[i].SetErr(err)
 					}
-					items = append(items, qItem.NewItem(job.Job{
+					items = append(items, qitem.NewItem(job.Job{
 						ID:             j.GetID(),
 						Hash:           j.GetHash(),
 						Name:           j.GetName(),
@@ -205,9 +205,9 @@ func (c *Chord) Dispatch() {
 	}
 	close(resChan)
 
-	var callbackResults []qItem.Item
+	var callbackResults []qitem.Item
 	var callbackArgs []interface{}        //holds result of execs
-	callbackChan := make(chan qItem.Item) //causes program to pause
+	callbackChan := make(chan qitem.Item) //causes program to pause
 	for _, item := range items {
 		callbackArgs = append(callbackArgs, item.GetExec().GetResult())
 	}
@@ -229,7 +229,7 @@ func (c *Chord) Dispatch() {
 				if err != nil {
 					exec.SetErr(err)
 				}
-				callbackResults = append(callbackResults, qItem.NewItem(job.Job{
+				callbackResults = append(callbackResults, qitem.NewItem(job.Job{
 					ID:             cj.GetID(),
 					Hash:           cj.GetHash(),
 					Name:           cj.GetName(),

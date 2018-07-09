@@ -1,11 +1,11 @@
 package p2p
 
-import "github.com/gizo-network/gizo/job/queue/qItem"
+import "github.com/gizo-network/gizo/job/queue/qitem"
 
 //WorkerInfo information about worker
 type WorkerInfo struct {
 	pub  string
-	job  *qItem.Item
+	job  *qitem.Item
 	shut bool
 }
 
@@ -25,17 +25,17 @@ func (w *WorkerInfo) SetPub(pub string) {
 }
 
 //GetJob returns job
-func (w WorkerInfo) GetJob() *qItem.Item {
+func (w WorkerInfo) GetJob() *qitem.Item {
 	return w.job
 }
 
 //SetJob sets job
-func (w *WorkerInfo) SetJob(j *qItem.Item) {
+func (w *WorkerInfo) SetJob(j *qitem.Item) {
 	w.job = j
 }
 
 //Assign assigns job to worker
-func (w *WorkerInfo) Assign(j *qItem.Item) {
+func (w *WorkerInfo) Assign(j *qitem.Item) {
 	w.job = j
 }
 

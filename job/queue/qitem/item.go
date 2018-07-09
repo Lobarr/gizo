@@ -1,4 +1,4 @@
-package qItem
+package qitem
 
 import (
 	"github.com/gizo-network/gizo/job"
