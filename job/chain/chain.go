@@ -14,6 +14,7 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
+	"github.com/gizo-network/gizo/job/queue/qItem"
 )
 
 //Chain - jobs executed one after the other

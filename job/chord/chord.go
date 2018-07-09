@@ -12,6 +12,7 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
+	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/kpango/glg"
 )
 

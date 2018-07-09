@@ -9,6 +9,7 @@ import (
 	"github.com/gizo-network/gizo/crypt"
 	"github.com/gizo-network/gizo/job"
 
+	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/gizo-network/gizo/p2p"
 	"github.com/stretchr/testify/assert"
 )

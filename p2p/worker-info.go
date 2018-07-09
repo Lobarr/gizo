@@ -1,5 +1,9 @@
 package p2p
 
+import (
+	"github.com/gizo-network/gizo/job/queue/qItem"
+)
+
 //WorkerInfo information about worker
 type WorkerInfo struct {
 	pub  string

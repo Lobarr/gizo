@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"github.com/gammazero/nexus/wamp"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gammazero/nexus/wamp"
 
 	nx_router "github.com/gammazero/nexus/router"
 
@@ -66,7 +67,7 @@ type Dispatcher struct {
 	bench     benchmark.Engine //benchmark of node
 	wWS       *melody.Melody   //workers ws server
 	dWS       *melody.Melody   //dispatchers ws server
-	wamp      *nx_router.Router
+	wamp      *nx_router.WebsocketServer
 	rpcHTTP   *rpc.HTTPService // rpc servce
 	rpcWS     *rpc_ws.WebSocketService
 	router    *mux.Router
@@ -390,9 +391,8 @@ func (d Dispatcher) Start() {
 	d.wPeerTalk()
 	d.dPeerTalk()
 	d.RPCHTTP()
-	d.RPCWS()
 	d.router.Handle("/rpc", d.GetRPCHTTP()).Methods("POST")
-	d.router.Handle("/rpc-ws", d.GetRPCWS()).Methods("POST")
+	d.router.Handle("/wamp", d.wamp).Methods("POST")
 	status := make(map[string]string)
 	status["status"] = "running"
 	status["pub"] = d.GetPubString()
@@ -551,13 +551,21 @@ func NewDispatcher(port int) *Dispatcher {
 	wampConfig := &nx_router.Config{
 		RealmConfigs: []*nx_router.RealmConfig{
 			&nx_router.RealmConfig{
-				URI: wamp.URI("gizo.network"),
+				URI:           wamp.URI("gizo.network"),
 				AnonymousAuth: true,
-			}
-		}
+			},
+		},
 	}
 
-	nxr, err := nx_router.NewRawSocketServer(wampConfig, 0, 0)
+	nxr, err := nx_router.NewRouter(wampConfig, nil)
+	if err != nil {
+		glg.Fatal(err)
+	}
+
+	wampRouter := nx_router.NewWebsocketServer(nxr)
+	wampRouter.Upgrader.EnableCompression = true
+	wampRouter.Upgrader.ReadBufferSize = 1000000
+	wampRouter.Upgrader.WriteBufferSize = 1000000
 
 	var dbFile string
 	if os.Getenv("ENV") == "dev" {
@@ -610,6 +618,7 @@ func NewDispatcher(port int) *Dispatcher {
 			router:    mux.NewRouter(),
 			wWS:       melody.New(),
 			dWS:       melody.New(),
+			wamp:      wampRouter,
 			rpcHTTP:   rpc.NewHTTPService(),
 			rpcWS:     rpc_ws.NewWebSocketService(),
 			mu:        new(sync.Mutex),
@@ -676,6 +685,7 @@ func NewDispatcher(port int) *Dispatcher {
 		router:    mux.NewRouter(),
 		wWS:       melody.New(),
 		dWS:       melody.New(),
+		wamp:      wampRouter,
 		rpcHTTP:   rpc.NewHTTPService(),
 		rpcWS:     rpc_ws.NewWebSocketService(),
 		mu:        new(sync.Mutex),

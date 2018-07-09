@@ -15,6 +15,7 @@ import (
 
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
+	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/gorilla/websocket"
 	"github.com/kpango/glg"
 )
