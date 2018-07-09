@@ -4,7 +4,7 @@ import (
 	lane "github.com/Lobarr/lane"
 	"github.com/gizo-network/gizo/helpers"
 	"github.com/gizo-network/gizo/job"
-	"github.com/gizo-network/gizo/job/queue/qitem"
+	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/kpango/glg"
 )
 
@@ -15,7 +15,7 @@ type JobPriorityQueue struct {
 }
 
 //Push adds item config to priority queue
-func (pq JobPriorityQueue) Push(j job.Job, exec *job.Exec, results chan<- qitem.Item, cancel chan struct{}) error {
+func (pq JobPriorityQueue) Push(j job.Job, exec *job.Exec, results chan<- qItem.Item, cancel chan struct{}) error {
 	task, err := j.GetTask()
 	if err != nil {
 		return err
@@ -29,22 +29,22 @@ func (pq JobPriorityQueue) Push(j job.Job, exec *job.Exec, results chan<- qitem.
 		SubmissionTime: j.GetSubmissionTime(),
 		Private:        j.GetPrivate(),
 	}
-	pq.GetPQ().Push(qitem.NewItem(temp, exec, results, cancel), exec.GetPriority())
+	pq.GetPQ().Push(qItem.NewItem(temp, exec, results, cancel), exec.GetPriority())
 	pq.logger.Log("JobPriotityQueue: received job - " + j.GetID())
 	return nil
 }
 
 //PushItem adds item to priority queue
-func (pq JobPriorityQueue) PushItem(i qitem.Item, piority int) {
+func (pq JobPriorityQueue) PushItem(i qItem.Item, piority int) {
 	pq.GetPQ().Push(i, piority)
 	pq.logger.Log("JobPriotityQueue: received job - " + i.GetID())
 
 }
 
 //Pop returns next item in the queue
-func (pq JobPriorityQueue) Pop() qitem.Item {
+func (pq JobPriorityQueue) Pop() qItem.Item {
 	i, _ := pq.GetPQ().Pop()
-	return i.(qitem.Item)
+	return i.(qItem.Item)
 }
 
 //Remove removes item from the priority queue

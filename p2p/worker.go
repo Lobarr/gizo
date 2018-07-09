@@ -15,7 +15,6 @@ import (
 
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
-	"github.com/gizo-network/gizo/job/queue/qitem"
 	"github.com/gorilla/websocket"
 	"github.com/kpango/glg"
 )
@@ -33,17 +32,17 @@ type Worker struct {
 	shutdown   chan struct{}
 	busy       bool
 	state      string
-	item       qitem.Item
+	item       qItem.Item
 	logger     *glg.Glg
 }
 
 //GetItem returns worker item
-func (w Worker) GetItem() qitem.Item {
+func (w Worker) GetItem() qItem.Item {
 	return w.item
 }
 
 //SetItem sets item
-func (w *Worker) SetItem(i qitem.Item) {
+func (w *Worker) SetItem(i qItem.Item) {
 	w.item = i
 }
 
@@ -164,7 +163,7 @@ func (w *Worker) Start() {
 			}
 			fmt.Println(verify)
 			if verify {
-				var item qitem.Item
+				var item qItem.Item
 				err = helpers.Deserialize(m.GetPayload(), &item)
 				if err != nil {
 					glg.Fatal(err)

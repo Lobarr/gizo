@@ -14,7 +14,6 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
-	"github.com/gizo-network/gizo/job/queue/qitem"
 )
 
 //Chain - jobs executed one after the other
@@ -111,8 +110,8 @@ func (c Chain) Result() []job.Request {
 //Dispatch executes the chain
 func (c *Chain) Dispatch() {
 	c.setStatus(job.RUNNING)
-	var results []qitem.Item // used to hold results
-	res := make(chan qitem.Item)
+	var results []qItem.Item // used to hold results
+	res := make(chan qItem.Item)
 	cancelled := false
 	closeCancel := make(chan struct{})
 	var wg sync.WaitGroup
@@ -159,7 +158,7 @@ func (c *Chain) Dispatch() {
 					jr.GetExec()[i].SetErr(err)
 				}
 				if cancelled == true {
-					results = append(results, qitem.NewItem(job.Job{
+					results = append(results, qItem.NewItem(job.Job{
 						ID:             j.GetID(),
 						Hash:           j.GetHash(),
 						Name:           j.GetName(),

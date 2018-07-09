@@ -12,7 +12,6 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
-	"github.com/gizo-network/gizo/job/queue/qitem"
 	"github.com/kpango/glg"
 )
 
@@ -111,7 +110,7 @@ func (b Batch) Result() []job.Request {
 //Dispatch executes the batch
 func (b *Batch) Dispatch() {
 	//! should be run in a go routine because it blocks till all jobs are complete
-	var items []qitem.Item
+	var items []qItem.Item
 	b.setStatus(job.RUNNING)
 	cancelled := false
 	closeCancel := make(chan struct{})
@@ -139,7 +138,7 @@ func (b *Batch) Dispatch() {
 		wg.Done()
 	}()
 
-	results := make(chan qitem.Item, b.getLength())
+	results := make(chan qItem.Item, b.getLength())
 	var jobIDs []string
 	var sleepWG sync.WaitGroup
 	for _, jr := range b.GetJobs() {

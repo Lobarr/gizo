@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/gammazero/nexus/wamp"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	nx_router "github.com/gammazero/nexus/router"
 
 	"github.com/Lobarr/lane"
 	upnp "github.com/NebulousLabs/go-upnp"
@@ -63,6 +66,7 @@ type Dispatcher struct {
 	bench     benchmark.Engine //benchmark of node
 	wWS       *melody.Melody   //workers ws server
 	dWS       *melody.Melody   //dispatchers ws server
+	wamp      *nx_router.Router
 	rpcHTTP   *rpc.HTTPService // rpc servce
 	rpcWS     *rpc_ws.WebSocketService
 	router    *mux.Router
@@ -543,6 +547,17 @@ func NewDispatcher(port int) *Dispatcher {
 	}
 
 	centrum := NewCentrum()
+
+	wampConfig := &nx_router.Config{
+		RealmConfigs: []*nx_router.RealmConfig{
+			&nx_router.RealmConfig{
+				URI: wamp.URI("gizo.network"),
+				AnonymousAuth: true,
+			}
+		}
+	}
+
+	nxr, err := nx_router.NewRawSocketServer(wampConfig, 0, 0)
 
 	var dbFile string
 	if os.Getenv("ENV") == "dev" {

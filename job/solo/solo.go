@@ -6,11 +6,10 @@ import (
 	"time"
 
 	"github.com/gizo-network/gizo/cache"
-
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/job"
 	"github.com/gizo-network/gizo/job/queue"
-	"github.com/gizo-network/gizo/job/queue/qitem"
+	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/kpango/glg"
 )
 
@@ -87,8 +86,8 @@ func (s Solo) Result() job.Request {
 //Dispatch executes the solo
 func (s *Solo) Dispatch() {
 	s.setStatus(job.RUNNING)
-	var result qitem.Item
-	res := make(chan qitem.Item)
+	var result qItem.Item
+	res := make(chan qItem.Item)
 	cancelled := false
 	closeCancel := make(chan struct{})
 	var wg sync.WaitGroup
@@ -126,7 +125,7 @@ func (s *Solo) Dispatch() {
 			if err != nil {
 				j.GetExecs()[0].SetErr(err)
 			}
-			result = qitem.NewItem(job.Job{
+			result = qItem.NewItem(job.Job{
 				ID:             j.GetID(),
 				Hash:           j.GetHash(),
 				Name:           j.GetName(),
