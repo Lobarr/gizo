@@ -1,7 +1,7 @@
 package p2p
 
 //RPCHTTP exposes rpc functions
-func (d Dispatcher) RPCHTTP() {
+func (d Dispatcher) RPC() {
 	d.GetRPCHTTP().AddFunction("Version", d.Version)
 	d.GetRPCHTTP().AddFunction("PeerCount", d.PeerCount)
 	d.GetRPCHTTP().AddFunction("BlockByHash", d.BlockByHash)
@@ -10,7 +10,6 @@ func (d Dispatcher) RPCHTTP() {
 	d.GetRPCHTTP().AddFunction("LatestBlock", d.LatestBlock)
 	d.GetRPCHTTP().AddFunction("PendingCount", d.PendingCount)
 	d.GetRPCHTTP().AddFunction("Score", d.Score)
-	d.GetRPCHTTP().AddFunction("Peers", d.Peers)
 	d.GetRPCHTTP().AddFunction("PublicKey", d.PublicKey)
 	d.GetRPCHTTP().AddFunction("NewJob", d.NewJob)
 	d.GetRPCHTTP().AddFunction("NewExec", d.NewExec)

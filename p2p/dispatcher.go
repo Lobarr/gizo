@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -38,12 +39,12 @@ import (
 
 	"github.com/kpango/glg"
 
+	"github.com/gammazero/nexus/client"
 	"github.com/gizo-network/gizo/benchmark"
 	"github.com/gizo-network/gizo/cache"
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 )
 
 var (
@@ -61,9 +62,9 @@ type Dispatcher struct {
 	priv      []byte //private key of the node
 	uptime    int64  //time since node has been up
 	jobPQ     *queue.JobPriorityQueue
-	workers   map[*melody.Session]*WorkerInfo //worker nodes in dispatcher's area
-	peers     map[interface{}]*DispatcherInfo // neighbours of the node
+	workers   map[string]*WorkerInfo //worker nodes in dispatcher's area
 	workerPQ  *WorkerPriorityQueue
+	peers     map[string]*client.Client
 	bench     benchmark.Engine //benchmark of node
 	wWS       *melody.Melody   //workers ws server
 	dWS       *melody.Melody   //dispatchers ws server
@@ -81,11 +82,21 @@ type Dispatcher struct {
 	centrum   *Centrum
 	discover  *upnp.IGD //used for upnp external ip discovery
 	new       bool      // if true, sends a new dispatcher to centrum else sends a wake with token
+	dClient   *client.Client
+	wClient   *client.Client
 }
 
 //GetJobs returns jobs held in memory to be written to the bc
 func (d Dispatcher) GetJobs() map[string]job.Job {
 	return d.jobs
+}
+
+func (d *Dispatcher) AddPeer(p string, c *client.Client) {
+	d.peers[p] = c
+}
+
+func (d Dispatcher) GetPeers() map[string]*client.Client {
+	return d.peers
 }
 
 //watches the queue of jobs to be written to the bc
@@ -94,13 +105,13 @@ func (d Dispatcher) watchWriteQ() {
 	for {
 		if d.GetWriteQ().Empty() == false {
 			jobs := d.GetWriteQ().Dequeue()
-			d.WriteJobs(jobs.(map[string]job.Job))
+			d.WriteJobsAndPublish(jobs.(map[string]job.Job))
 		}
 	}
 }
 
 //WriteJobs writes jobs to the bc
-func (d Dispatcher) WriteJobs(jobs map[string]job.Job) {
+func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 	nodes := []*merkletree.MerkleNode{}
 	for _, job := range jobs {
 		node, err := merkletree.NewNode(job, nil, nil)
@@ -129,15 +140,37 @@ func (d Dispatcher) WriteJobs(jobs map[string]job.Job) {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	blockBytes, err := helpers.Serialize(block)
+	//blockBytes, err := helpers.Serialize(block)
+	//if err != nil {
+	//	glg.Fatal(err)
+	//}
+	//bm, err := BlockMessage(blockBytes, d.GetPrivByte())
+	//if err != nil {
+	//	glg.Fatal(err)
+	//}
+	//d.BroadcastPeers(bm)
+	err = d.dClient.Publish(BLOCK, nil, wamp.List{*block}, nil)
 	if err != nil {
 		glg.Fatal(err)
 	}
-	bm, err := BlockMessage(blockBytes, d.GetPrivByte())
+}
+
+func (d *Dispatcher) BlockSubscribe(peer *client.Client) {
+	handler := func(args wamp.List, kwargs wamp.Dict, details wamp.Dict) {
+		block := args[0].(core.Block)
+		check, _ := d.GetBC().GetBlockInfo(block.GetHeader().GetHash())
+		if check == nil {
+			d.GetBC().AddBlock(&block)
+			err := d.dClient.Publish(BLOCK, nil, wamp.List{block}, nil)
+			if err != nil {
+				glg.Fatal(err)
+			}
+		}
+	}
+	err := peer.Subscribe(BLOCK, handler, nil)
 	if err != nil {
 		glg.Fatal(err)
 	}
-	d.BroadcastPeers(bm)
 }
 
 //AddJob keeps job in memory before being written to the bc
@@ -168,13 +201,13 @@ func (d Dispatcher) GetWorkerPQ() *WorkerPriorityQueue {
 }
 
 //GetAssignedWorker returns worker assigned to execute job
-func (d Dispatcher) GetAssignedWorker(hash string) *melody.Session {
+func (d Dispatcher) GetAssignedWorker(hash string) string {
 	for key, val := range d.GetWorkers() {
 		if val.GetJob().GetJob().GetHash() == hash {
 			return key
 		}
 	}
-	return nil
+	return ""
 }
 
 //GetIP returns ip address of node
@@ -218,42 +251,18 @@ func (d Dispatcher) GetJobPQ() *queue.JobPriorityQueue {
 }
 
 //GetWorkers returns workers in the standard area
-func (d Dispatcher) GetWorkers() map[*melody.Session]*WorkerInfo {
+func (d Dispatcher) GetWorkers() map[string]*WorkerInfo {
 	return d.workers
 }
 
 //GetWorker returns specified worker
-func (d Dispatcher) GetWorker(s *melody.Session) *WorkerInfo {
+func (d Dispatcher) GetWorker(s string) *WorkerInfo {
 	return d.GetWorkers()[s]
 }
 
-//SetWorker sets worker
-func (d *Dispatcher) SetWorker(s *melody.Session, w *WorkerInfo) {
-	d.GetWorkers()[s] = w
-}
-
-//GetPeers returns peers of a peer
-func (d Dispatcher) GetPeers() map[interface{}]*DispatcherInfo {
-	return d.peers
-}
-
-//GetPeersPubs returns public keys of peers
-func (d Dispatcher) GetPeersPubs() []string {
-	var temp []string
-	for _, info := range d.GetPeers() {
-		temp = append(temp, hex.EncodeToString(info.GetPub()))
-	}
-	return temp
-}
-
-//GetPeer returns dispatcher info of specific peer
-func (d Dispatcher) GetPeer(n interface{}) *DispatcherInfo {
-	return d.GetPeers()[n]
-}
-
-//AddPeer adds peers
-func (d *Dispatcher) AddPeer(s interface{}, n *DispatcherInfo) {
-	d.GetPeers()[s] = n
+//AddWorker sets worker
+func (d *Dispatcher) AddWorker(pub string) {
+	d.GetWorkers()[pub] = NewWorkerInfo(pub)
 }
 
 //GetBC returns blockchain object
@@ -328,7 +337,7 @@ func (d Dispatcher) setRPCWS(s *rpc_ws.WebSocketService) {
 }
 
 //WorkerExists checks if worker is in node's standard area
-func (d Dispatcher) WorkerExists(s *melody.Session) bool {
+func (d Dispatcher) WorkerExists(s string) bool {
 	_, ok := d.workers[s]
 	return ok
 }
@@ -350,7 +359,8 @@ func (d Dispatcher) watchInterrupt() {
 			if err != nil {
 				glg.Fatal(err)
 			}
-			d.BroadcastWorkers(sm)
+			d.dClient.Close()
+			d.wClient.Close()
 			time.Sleep(time.Second * 3) // give neighbors and workers 3 seconds to disconnect
 			os.Exit(0)
 		case syscall.SIGQUIT:
@@ -390,7 +400,7 @@ func (d Dispatcher) Start() {
 	})
 	d.wPeerTalk()
 	d.dPeerTalk()
-	d.RPCHTTP()
+	d.RPC()
 	d.router.Handle("/rpc", d.GetRPCHTTP()).Methods("POST")
 	d.router.Handle("/wamp", d.wamp).Methods("POST")
 	status := make(map[string]string)
@@ -467,7 +477,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 		glg.Fatal(err)
 	}
 	syncVersion := new(Version)
-	syncPeer := new(websocket.Conn)
+	syncPeer := new(client.Client)
 	dispatchers, ok := res["dispatchers"]
 	if !ok {
 		glg.Warn(ErrNoDispatchers)
@@ -478,24 +488,22 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 		addr, err := ParseAddr(dispatcher)
 		if err == nil && addr["pub"] != d.GetPubString() {
 			var v Version
-			wsURL := fmt.Sprintf("ws://%v:%v/d", addr["ip"], addr["port"])
+			wsURL := fmt.Sprintf("ws://%v:%v/wamp", addr["ip"], addr["port"])
 			versionURL := fmt.Sprintf("http://%v:%v/rpc", addr["ip"], addr["port"])
-			dailer := websocket.Dialer{
-				Proxy:           http.ProxyFromEnvironment,
-				ReadBufferSize:  10000,
-				WriteBufferSize: 10000,
-			}
-			conn, _, err := dailer.Dial(wsURL, nil)
+			conn, err := client.ConnectNet(wsURL, client.Config{
+				Realm: "gizo.network.dispatcher",
+			})
+
 			if err != nil {
 				continue
 			}
-			conn.EnableWriteCompression(true)
+
 			pubBytes, err := hex.DecodeString(addr["pub"])
 			if err != nil {
 				glg.Fatal(err)
 			}
-			d.AddPeer(conn, NewDispatcherInfo(pubBytes, []string{}))
-			go d.handleNodeConnect(conn)
+			d.AddPeer(addr["pub"], conn)
+			go d.BlockSubscribe(conn)
 			_, err = s.New().Get(versionURL).ReceiveSuccess(&v)
 			if err != nil {
 				glg.Fatal(err)
@@ -518,11 +526,13 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 				if err != nil {
 					glg.Fatal(err)
 				}
-				brm, err := BlockReqMessage(hashBytes, d.GetPrivByte())
+				result, err := syncPeer.Call(context.Background(), "BlockReq", nil, wamp.List{hash}, nil, "")
 				if err != nil {
-					glg.Fatal(err)
+					syncVersion.Blocks = append(syncVersion.Blocks, hash)
+					continue
 				}
-				syncPeer.WriteMessage(websocket.BinaryMessage, brm)
+				block := result.Arguments[0].(core.Block)
+				d.GetBC().AddBlock(&block)
 			}
 		}
 	}
@@ -551,11 +561,11 @@ func NewDispatcher(port int) *Dispatcher {
 	wampConfig := &nx_router.Config{
 		RealmConfigs: []*nx_router.RealmConfig{
 			&nx_router.RealmConfig{
-				URI:           wamp.URI("gizo.network.dispatchers"),
+				URI:           wamp.URI("gizo.network.dispatcher"),
 				AnonymousAuth: true,
 			},
 			&nx_router.RealmConfig{
-				URI:           wamp.URI("gizo.network.workers"),
+				URI:           wamp.URI("gizo.network.worker"),
 				AnonymousAuth: true,
 			},
 		},
@@ -570,6 +580,22 @@ func NewDispatcher(port int) *Dispatcher {
 	wampRouter.Upgrader.EnableCompression = true
 	wampRouter.Upgrader.ReadBufferSize = 1000000
 	wampRouter.Upgrader.WriteBufferSize = 1000000
+
+	dClient, err := client.ConnectLocal(nxr, client.Config{
+		Realm: "gizo.network.dispatcher",
+	})
+
+	if err != nil {
+		glg.Fatal(err)
+	}
+
+	wClient, err := client.ConnectLocal(nxr, client.Config{
+		Realm: "gizo.network.worker",
+	})
+
+	if err != nil {
+		glg.Fatal(err)
+	}
 
 	var dbFile string
 	if os.Getenv("ENV") == "dev" {
@@ -613,9 +639,9 @@ func NewDispatcher(port int) *Dispatcher {
 			uptime:    time.Now().Unix(),
 			bench:     bench,
 			jobPQ:     queue.NewJobPriorityQueue(),
-			workers:   make(map[*melody.Session]*WorkerInfo),
+			workers:   make(map[string]*WorkerInfo),
 			workerPQ:  NewWorkerPriorityQueue(),
-			peers:     make(map[interface{}]*DispatcherInfo),
+			peers:     make(map[string]*client.Client),
 			jc:        jc,
 			bc:        bc,
 			db:        db,
@@ -632,6 +658,8 @@ func NewDispatcher(port int) *Dispatcher {
 			discover:  discover,
 			new:       false,
 			jobs:      make(map[string]job.Job),
+			dClient:   dClient,
+			wClient:   wClient,
 		}
 	}
 
@@ -680,9 +708,9 @@ func NewDispatcher(port int) *Dispatcher {
 		uptime:    time.Now().Unix(),
 		bench:     bench,
 		jobPQ:     queue.NewJobPriorityQueue(),
-		workers:   make(map[*melody.Session]*WorkerInfo),
+		workers:   make(map[string]*WorkerInfo),
 		workerPQ:  NewWorkerPriorityQueue(),
-		peers:     make(map[interface{}]*DispatcherInfo),
+		peers:     make(map[string]*client.Client),
 		jc:        jc,
 		bc:        bc,
 		db:        db,
@@ -699,5 +727,7 @@ func NewDispatcher(port int) *Dispatcher {
 		discover:  discover,
 		new:       true,
 		jobs:      make(map[string]job.Job),
+		dClient:   dClient,
+		wClient:   wClient,
 	}
 }

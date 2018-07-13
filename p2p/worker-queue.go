@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"github.com/Lobarr/lane"
-	"gopkg.in/olahol/melody.v1"
 )
 
 //WorkerPriorityQueue priotity queue of workers
@@ -11,19 +10,14 @@ type WorkerPriorityQueue struct {
 }
 
 //Push adds worker to the priority queue
-func (pq WorkerPriorityQueue) Push(s *melody.Session, priority int) {
+func (pq WorkerPriorityQueue) Push(s string, priority int) {
 	pq.getPQ().Push(s, priority)
 }
 
 //Pop returns next worker in the priority queue
-func (pq WorkerPriorityQueue) Pop() *melody.Session {
+func (pq WorkerPriorityQueue) Pop() string {
 	i, _ := pq.getPQ().Pop()
-	return i.(*melody.Session)
-}
-
-//Remove removes worker from the priority queue
-func (pq WorkerPriorityQueue) Remove(s *melody.Session) {
-	pq.getPQ().RemoveSession(s)
+	return i.(string)
 }
 
 func (pq WorkerPriorityQueue) getPQ() *lane.PQueue {

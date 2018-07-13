@@ -100,11 +100,6 @@ func (d Dispatcher) Score() float64 {
 	return d.GetBench().GetScore()
 }
 
-//Peers returns the public keys of its peers
-func (d Dispatcher) Peers() []string {
-	return d.GetPeersPubs()
-}
-
 //PublicKey returns public key of node
 func (d Dispatcher) PublicKey() string {
 	return d.GetPubString()
@@ -179,7 +174,7 @@ func (d Dispatcher) WorkersCountNotBusy() int {
 func (d Dispatcher) ExecStatus(id string, hash string) (string, error) {
 	if d.GetJobPQ().GetPQ().InQueueHash(hash) {
 		return job.QUEUED, nil
-	} else if worker := d.GetAssignedWorker(hash); worker != nil {
+	} else if worker := d.GetAssignedWorker(hash); worker != "" {
 		return job.RUNNING, nil
 	}
 	e, err := d.GetBC().FindExec(id, hash)
@@ -191,12 +186,13 @@ func (d Dispatcher) ExecStatus(id string, hash string) (string, error) {
 
 //CancelExec cancels exc
 func (d Dispatcher) CancelExec(hash string) error {
-	if worker := d.GetAssignedWorker(hash); worker != nil {
+	if worker := d.GetAssignedWorker(hash); worker != "" {
 		cm, err := CancelMessage(d.GetPrivByte())
 		if err != nil {
 			return err
 		}
-		worker.Write(cm)
+		//TODO: tell worker to cancel job
+		//worker.Write(cm)
 		return nil
 	}
 	return errors.New("Exec not running")
