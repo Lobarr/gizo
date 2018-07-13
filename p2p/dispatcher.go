@@ -23,7 +23,6 @@ import (
 	"github.com/Lobarr/lane"
 	upnp "github.com/NebulousLabs/go-upnp"
 	"github.com/hprose/hprose-golang/rpc"
-	rpc_ws "github.com/hprose/hprose-golang/rpc/websocket"
 
 	"github.com/gizo-network/gizo/core/difficulty"
 	"github.com/gizo-network/gizo/core/merkletree"
@@ -33,7 +32,6 @@ import (
 	"github.com/gizo-network/gizo/helpers"
 	"github.com/gizo-network/gizo/job/queue"
 	funk "github.com/thoas/go-funk"
-	melody "gopkg.in/olahol/melody.v1"
 
 	"github.com/boltdb/bolt"
 
@@ -66,11 +64,8 @@ type Dispatcher struct {
 	workerPQ  *WorkerPriorityQueue
 	peers     map[string]*client.Client
 	bench     benchmark.Engine //benchmark of node
-	wWS       *melody.Melody   //workers ws server
-	dWS       *melody.Melody   //dispatchers ws server
-	wamp      *nx_router.WebsocketServer
-	rpcHTTP   *rpc.HTTPService // rpc servce
-	rpcWS     *rpc_ws.WebSocketService
+	wamp      nx_router.Router
+	rpc       *rpc.HTTPService // rpc servce
 	router    *mux.Router
 	jc        *cache.JobCache  //job cache
 	bc        *core.BlockChain //blockchain
@@ -91,10 +86,12 @@ func (d Dispatcher) GetJobs() map[string]job.Job {
 	return d.jobs
 }
 
+//AddPeer adds peer connection
 func (d *Dispatcher) AddPeer(p string, c *client.Client) {
 	d.peers[p] = c
 }
 
+//GetPeers returns peers
 func (d Dispatcher) GetPeers() map[string]*client.Client {
 	return d.peers
 }
@@ -110,7 +107,7 @@ func (d Dispatcher) watchWriteQ() {
 	}
 }
 
-//WriteJobs writes jobs to the bc
+//WriteJobsAndPublish writes jobs to the bc
 func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 	nodes := []*merkletree.MerkleNode{}
 	for _, job := range jobs {
@@ -140,21 +137,43 @@ func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	//blockBytes, err := helpers.Serialize(block)
-	//if err != nil {
-	//	glg.Fatal(err)
-	//}
-	//bm, err := BlockMessage(blockBytes, d.GetPrivByte())
-	//if err != nil {
-	//	glg.Fatal(err)
-	//}
-	//d.BroadcastPeers(bm)
 	err = d.dClient.Publish(BLOCK, nil, wamp.List{*block}, nil)
 	if err != nil {
 		glg.Fatal(err)
 	}
 }
 
+//assigns next job in the queue to the next available worker
+func (d *Dispatcher) deployJobs() {
+	for {
+		if d.GetWorkerPQ().getPQ().Empty() == false {
+			if d.GetJobPQ().GetPQ().Empty() == false {
+				d.mu.Lock()
+				w := d.GetWorkerPQ().Pop()
+				if !d.GetWorker(w).GetShut() {
+					j := d.GetJobPQ().Pop()
+					if j.GetExec().GetStatus() != job.CANCELLED {
+						j.GetExec().SetBy(d.GetWorker(w).GetPub())
+						d.GetWorker(w).Assign(&j)
+						glg.Info("P2P: dispatched job")
+						worker := d.GetWorker(w)
+						err := d.wClient.Publish(worker.JobTopic(), nil, wamp.List{j}, nil)
+						if err != nil {
+							glg.Fatal(err)
+						}
+					} else {
+						j.ResultsChan() <- j
+					}
+				} else {
+					delete(d.GetWorkers(), w)
+				}
+				d.mu.Unlock()
+			}
+		}
+	}
+}
+
+//BlockSubscribe subscribe and publish to block topic
 func (d *Dispatcher) BlockSubscribe(peer *client.Client) {
 	handler := func(args wamp.List, kwargs wamp.Dict, details wamp.Dict) {
 		block := args[0].(core.Block)
@@ -167,10 +186,59 @@ func (d *Dispatcher) BlockSubscribe(peer *client.Client) {
 			}
 		}
 	}
-	err := peer.Subscribe(BLOCK, handler, nil)
-	if err != nil {
-		glg.Fatal(err)
+	peer.Subscribe(BLOCK, handler, nil)
+}
+
+//WorkerDisconnect handles worker disconnect
+func (d Dispatcher) WorkerDisconnect() {
+	//TODO: handle unexpected disconnect
+	handler := func(args wamp.List, kwargs wamp.Dict, details wamp.Dict) {
+		d.mu.Lock()
+		glg.Log("Dispatcher: worker disconnected")
+		worker := args[0].(string)
+		d.GetWorker(worker).SetShut(true)
+		if d.GetWorker(worker).GetJob() != nil {
+			d.GetJobPQ().PushItem(*d.GetWorker(worker).GetJob(), job.BOOST)
+		}
+		d.mu.Unlock()
 	}
+	d.wClient.Subscribe(WORKERDISCONNECT, handler, nil)
+}
+
+//BlockReq handles peer request for block
+func (d Dispatcher) BlockReq(ctx context.Context, args wamp.List, kwargs, details wamp.Dict) *client.InvokeResult {
+	blockinfo, _ := d.GetBC().GetBlockInfo(args[0].(string))
+	block := blockinfo.GetBlock()
+	return &client.InvokeResult{Args: wamp.List{block}}
+}
+
+//WorkerConnect handles workers request to join area
+func (d *Dispatcher) WorkerConnect(ctx context.Context, args wamp.List, kwargs, details wamp.Dict) *client.InvokeResult {
+	if len(d.GetWorkers()) < MaxWorkers {
+		worker := args[0].(string)
+		d.AddWorker(worker)
+		d.centrum.ConnectWorker()
+		d.GetWorkerPQ().Push(worker, 0)
+		//handle results
+		handler := func(args wamp.List, kwargs, details wamp.Dict) {
+			d.mu.Lock()
+			exec := args[0].(job.Exec)
+			d.GetWorker(worker).GetJob().SetExec(&exec)
+			d.GetWorker(worker).GetJob().ResultsChan() <- *d.GetWorker(worker).GetJob()
+			j := d.GetWorker(worker).GetJob().GetJob()
+			d.GetWorker(worker).SetJob(nil)
+			j.AddExec(exec)
+			d.AddJob(j)
+			//TODO: send to requester's message broker
+			if !d.GetWorker(worker).GetShut() {
+				d.GetWorkerPQ().Push(worker, 0)
+			}
+			d.mu.Unlock()
+		}
+		d.wClient.Subscribe(d.GetWorker(worker).ResultTopic(), handler, nil)
+		return &client.InvokeResult{Args: wamp.List{CONNECTED}}
+	}
+	return &client.InvokeResult{Args: wamp.List{CONNFULL}}
 }
 
 //AddJob keeps job in memory before being written to the bc
@@ -300,46 +368,13 @@ func (d Dispatcher) GetJC() *cache.JobCache {
 	return d.jc
 }
 
-//GetWWS returns workers ws server
-func (d Dispatcher) GetWWS() *melody.Melody {
-	return d.wWS
+//GetRPC returns hprose rpc http server
+func (d Dispatcher) GetRPC() *rpc.HTTPService {
+	return d.rpc
 }
 
-func (d *Dispatcher) setWWS(m *melody.Melody) {
-	d.wWS = m
-}
-
-//GetDWS returns dispatchers ws server
-func (d Dispatcher) GetDWS() *melody.Melody {
-	return d.dWS
-}
-
-func (d *Dispatcher) setDWS(m *melody.Melody) {
-	d.dWS = m
-}
-
-//GetRPCHTTP returns hprose rpc http server
-func (d Dispatcher) GetRPCHTTP() *rpc.HTTPService {
-	return d.rpcHTTP
-}
-
-func (d Dispatcher) setRPCHTTP(s *rpc.HTTPService) {
-	d.rpcHTTP = s
-}
-
-//GetRPCWS returns hprose rpc ws server
-func (d Dispatcher) GetRPCWS() *rpc_ws.WebSocketService {
-	return d.rpcWS
-}
-
-func (d Dispatcher) setRPCWS(s *rpc_ws.WebSocketService) {
-	d.rpcWS = s
-}
-
-//WorkerExists checks if worker is in node's standard area
-func (d Dispatcher) WorkerExists(s string) bool {
-	_, ok := d.workers[s]
-	return ok
+func (d Dispatcher) setRPC(s *rpc.HTTPService) {
+	d.rpc = s
 }
 
 func (d Dispatcher) watchInterrupt() {
@@ -355,12 +390,9 @@ func (d Dispatcher) watchInterrupt() {
 			} else if res["status"].(string) != "success" {
 				glg.Fatal("Centrum: " + res["status"].(string))
 			}
-			sm, err := ShutMessage(d.GetPrivByte())
-			if err != nil {
-				glg.Fatal(err)
-			}
 			d.dClient.Close()
 			d.wClient.Close()
+			d.wamp.Close()
 			time.Sleep(time.Second * 3) // give neighbors and workers 3 seconds to disconnect
 			os.Exit(0)
 		case syscall.SIGQUIT:
@@ -382,27 +414,20 @@ func (d Dispatcher) Start() {
 	go d.watchWriteQ()
 	go d.watchInterrupt()
 	d.GetDispatchersAndSync()
-	d.wWS.Upgrader.ReadBufferSize = 100000
-	d.wWS.Upgrader.WriteBufferSize = 100000
-	d.wWS.Config.MessageBufferSize = 100000
-	d.wWS.Config.MaxMessageSize = 100000
-	d.wWS.Upgrader.EnableCompression = true
-	d.dWS.Upgrader.ReadBufferSize = 100000
-	d.dWS.Upgrader.WriteBufferSize = 100000
-	d.dWS.Config.MessageBufferSize = 100000
-	d.dWS.Config.MaxMessageSize = 100000
-	d.dWS.Upgrader.EnableCompression = true
-	d.router.HandleFunc("/d", func(w http.ResponseWriter, r *http.Request) {
-		d.dWS.HandleRequest(w, r)
-	})
-	d.router.HandleFunc("/w", func(w http.ResponseWriter, r *http.Request) {
-		d.wWS.HandleRequest(w, r)
-	})
-	d.wPeerTalk()
-	d.dPeerTalk()
+	d.WorkerDisconnect()
+	if err = d.dClient.Register(BLOCKREQ, d.BlockReq, nil); err != nil {
+		glg.Fatal(err)
+	}
+	if err = d.wClient.Register(WORKERCONNCT, d.WorkerConnect, nil); err != nil {
+		glg.Fatal(err)
+	}
 	d.RPC()
-	d.router.Handle("/rpc", d.GetRPCHTTP()).Methods("POST")
-	d.router.Handle("/wamp", d.wamp).Methods("POST")
+	wampRouter := nx_router.NewWebsocketServer(d.wamp)
+	wampRouter.Upgrader.EnableCompression = true
+	wampRouter.Upgrader.ReadBufferSize = 1000000
+	wampRouter.Upgrader.WriteBufferSize = 1000000
+	d.router.Handle("/rpc", d.GetRPC()).Methods("POST")
+	d.router.Handle("/wamp", wampRouter).Methods("POST")
 	status := make(map[string]string)
 	status["status"] = "running"
 	status["pub"] = d.GetPubString()
@@ -497,11 +522,6 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 			if err != nil {
 				continue
 			}
-
-			pubBytes, err := hex.DecodeString(addr["pub"])
-			if err != nil {
-				glg.Fatal(err)
-			}
 			d.AddPeer(addr["pub"], conn)
 			go d.BlockSubscribe(conn)
 			_, err = s.New().Get(versionURL).ReceiveSuccess(&v)
@@ -522,10 +542,6 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 		}
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
-				hashBytes, err := hex.DecodeString(hash)
-				if err != nil {
-					glg.Fatal(err)
-				}
 				result, err := syncPeer.Call(context.Background(), "BlockReq", nil, wamp.List{hash}, nil, "")
 				if err != nil {
 					syncVersion.Blocks = append(syncVersion.Blocks, hash)
@@ -575,11 +591,6 @@ func NewDispatcher(port int) *Dispatcher {
 	if err != nil {
 		glg.Fatal(err)
 	}
-
-	wampRouter := nx_router.NewWebsocketServer(nxr)
-	wampRouter.Upgrader.EnableCompression = true
-	wampRouter.Upgrader.ReadBufferSize = 1000000
-	wampRouter.Upgrader.WriteBufferSize = 1000000
 
 	dClient, err := client.ConnectLocal(nxr, client.Config{
 		Realm: "gizo.network.dispatcher",
@@ -646,11 +657,7 @@ func NewDispatcher(port int) *Dispatcher {
 			bc:        bc,
 			db:        db,
 			router:    mux.NewRouter(),
-			wWS:       melody.New(),
-			dWS:       melody.New(),
-			wamp:      wampRouter,
-			rpcHTTP:   rpc.NewHTTPService(),
-			rpcWS:     rpc_ws.NewWebSocketService(),
+			wamp:      nxr,
 			mu:        new(sync.Mutex),
 			interrupt: interrupt,
 			writeQ:    lane.NewQueue(),
@@ -715,11 +722,7 @@ func NewDispatcher(port int) *Dispatcher {
 		bc:        bc,
 		db:        db,
 		router:    mux.NewRouter(),
-		wWS:       melody.New(),
-		dWS:       melody.New(),
-		wamp:      wampRouter,
-		rpcHTTP:   rpc.NewHTTPService(),
-		rpcWS:     rpc_ws.NewWebSocketService(),
+		wamp:      nxr,
 		mu:        new(sync.Mutex),
 		interrupt: interrupt,
 		writeQ:    lane.NewQueue(),

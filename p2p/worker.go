@@ -1,14 +1,18 @@
 package p2p
 
 import (
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"path"
 	"syscall"
 	"time"
+
+	"github.com/gammazero/nexus/client"
+	"github.com/gammazero/nexus/wamp"
 
 	"github.com/boltdb/bolt"
 	"github.com/gizo-network/gizo/helpers"
@@ -16,7 +20,6 @@ import (
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
 	"github.com/gizo-network/gizo/job/queue/qItem"
-	"github.com/gorilla/websocket"
 	"github.com/kpango/glg"
 )
 
@@ -24,17 +27,31 @@ import (
 type Worker struct {
 	Pub        []byte //public key of the node
 	Dispatcher string
-	shortlist  []string        // array of dispatchers received from centrum
-	priv       []byte          //private key of the node
-	uptime     int64           //time since node has been up
-	blacklist  map[string]bool //untrusted nodes
-	conn       *websocket.Conn
+	shortlist  []string // array of dispatchers received from centrum
+	priv       []byte   //private key of the node
+	uptime     int64    //time since node has been up
+	conn       *client.Client
 	interrupt  chan os.Signal
 	shutdown   chan struct{}
 	busy       bool
 	state      string
 	item       qItem.Item
 	logger     *glg.Glg
+}
+
+//JobTopic channel that dispatcher emits jobs to worker
+func (w Worker) JobTopic() string {
+	return fmt.Sprintf("worker.%v.job", w.GetPubString())
+}
+
+//ResultTopic channel that worker emits result to dispatcher
+func (w Worker) ResultTopic() string {
+	return fmt.Sprintf("worker.%v.result", w.GetPubString())
+}
+
+//CancelTopic channel that dispatcher emits cancel req to worker
+func (w Worker) CancelTopic() string {
+	return fmt.Sprintf("worker.%v.cancel", w.GetPubString())
 }
 
 //GetItem returns worker item
@@ -117,120 +134,42 @@ func (w Worker) GetUptimeString() string {
 	return time.Unix(w.uptime, 0).Sub(time.Now()).String()
 }
 
-//Start starts running
-func (w *Worker) Start() {
+//Start runs a worker
+func (w Worker) Start() {
 	w.GetDispatchers()
 	w.Connect()
 	go w.WatchInterrupt()
-	hm, _ := HelloMessage(w.GetPubByte())
-	w.conn.WriteMessage(websocket.BinaryMessage, hm)
-	for {
-		_, message, err := w.conn.ReadMessage()
-		if err != nil {
-			w.Connect()
-			continue
-		}
-		var m PeerMessage
-		err = helpers.Deserialize(message, &m)
-		if err != nil {
-			// w.Connect()
-			// continue
-			w.Disconnect()
-			fmt.Println(err)
-		}
-		switch m.GetMessage() {
-		case CONNFULL:
-			w.Disconnect()
-			w.Connect()
-			break
-		case HELLO:
-			if w.GetDispatcher() != hex.EncodeToString(m.GetPayload()) {
-				w.Disconnect()
-				w.Connect()
-			}
-			w.SetState(INIT)
-			glg.Info("P2P: connected to dispatcher")
-			break
-		case JOB:
-			glg.Info("P2P: job received")
-			if w.GetState() != LIVE {
-				w.SetState(LIVE)
-			}
-			w.SetBusy(true)
-			fmt.Println(m.GetMessage(), m.GetPayload(), m.GetSignature())
-			verify, err := m.VerifySignature(w.GetDispatcher())
-			if err != nil {
-				glg.Fatal(err)
-			}
-			fmt.Println(verify)
-			if verify {
-				var item qItem.Item
-				err = helpers.Deserialize(m.GetPayload(), &item)
-				if err != nil {
-					glg.Fatal(err)
-				}
-				w.SetItem(item)
-				exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
-				w.item.SetExec(exec)
-				resultBytes, err := helpers.Serialize(w.item.GetExec())
-				if err != nil {
-					glg.Fatal(err)
-				}
-				rm, err := ResultMessage(resultBytes, w.GetPrivByte())
-				if err != nil {
-					glg.Fatal(err)
-				}
-				w.conn.WriteMessage(websocket.BinaryMessage, rm)
-			} else {
-				fmt.Println("unable to verify signature")
-				// w.blacklist[w.GetDispatcher()] = true
-				// is, err := InvalidSignature()
-				// if err != nil {
-				// 	glg.Fatal(err)
-				// }
-				// w.conn.WriteMessage(websocket.BinaryMessage, is)
-				// w.Disconnect()
-				// w.Connect()
-			}
-			w.SetBusy(false)
-			break
-		case CANCEL:
-			glg.Info("P2P: job cancelled")
-			verify, err := m.VerifySignature(w.GetDispatcher())
-			if err != nil {
-				glg.Fatal(err)
-			}
-			if verify {
-				w.item.GetExec().Cancel()
-			} else {
-				w.blacklist[w.GetDispatcher()] = true
-				is, err := InvalidSignature()
-				if err != nil {
-					glg.Fatal(err)
-				}
-				w.conn.WriteMessage(websocket.BinaryMessage, is)
-			}
-			break
-		case SHUT:
-			w.Connect()
-			break
-		case SHUTACK:
-			for {
-				if w.GetBusy() {
-					continue
-				} else {
-					break
-				}
-			} // wait until worker not busy
-			w.Disconnect()
-			w.SetState(DOWN)
-			glg.Info("Worker: graceful shutdown")
-			os.Exit(0)
-		default:
-			w.Disconnect() //look for new dispatcher
-			break
-		}
+	w.JobSubscription()
+	w.CancelJobSubscription()
+	select {
+	case <-w.conn.Done():
+		w.Connect()
 	}
+}
+
+//CancelJobSubscription handles cancellation requests
+func (w Worker) CancelJobSubscription() {
+	handler := func(args wamp.List, kwargs, details wamp.Dict) {
+		w.item.GetExec().Cancel()
+	}
+	w.conn.Subscribe(w.CancelTopic(), handler, nil)
+}
+
+//JobSubscription handles job execution
+func (w Worker) JobSubscription() {
+	glg.Log("P2P: received job")
+	handler := func(args wamp.List, kwargs, details wamp.Dict) {
+		if w.GetState() != LIVE {
+			w.SetState(LIVE)
+		}
+		w.SetBusy(true)
+		item := args[0].(qItem.Item)
+		w.SetItem(item)
+		exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
+		w.item.SetExec(exec)
+		w.conn.Publish(w.ResultTopic(), nil, wamp.List{*w.item.GetExec()}, nil)
+	}
+	w.conn.Subscribe(w.JobTopic(), handler, nil)
 }
 
 //Disconnect disconnects from dispatcher
@@ -242,9 +181,8 @@ func (w Worker) Disconnect() {
 func (w *Worker) Connect() {
 	for i, dispatcher := range w.GetShortlist() {
 		addr, err := ParseAddr(dispatcher)
-		_, ok := w.blacklist[addr["pub"]]
-		if err == nil && !ok {
-			url := fmt.Sprintf("ws://%v:%v/w", addr["ip"], addr["port"])
+		if err == nil {
+			url := fmt.Sprintf("ws://%v:%v/wamp", addr["ip"], addr["port"])
 			if err = w.Dial(url); err == nil {
 				w.SetDispatcher(addr["pub"])
 				return
@@ -257,16 +195,19 @@ func (w *Worker) Connect() {
 
 //Dial attempts ws connections to dispatcher
 func (w *Worker) Dial(url string) error {
-	dailer := websocket.Dialer{
-		Proxy:           http.ProxyFromEnvironment,
-		ReadBufferSize:  10000,
-		WriteBufferSize: 10000,
-	}
-	conn, _, err := dailer.Dial(url, nil)
+	conn, err := client.ConnectNet(url, client.Config{
+		Realm: "gizo.network.worker",
+	})
 	if err != nil {
 		return err
 	}
-	conn.EnableWriteCompression(true)
+	res, err := conn.Call(context.Background(), WORKERCONNCT, nil, wamp.List{w.GetPubString()}, nil, "")
+	if err != nil {
+		return err
+	}
+	if res.Arguments[0].(string) == CONNFULL {
+		return errors.New(CONNFULL)
+	}
 	w.conn = conn
 	return nil
 }
@@ -277,15 +218,10 @@ func (w Worker) WatchInterrupt() {
 	case i := <-w.interrupt:
 		glg.Warn("Worker: interrupt detected")
 		switch i {
-		case syscall.SIGINT, syscall.SIGTERM:
-			sm, err := ShutMessage(w.GetPrivByte())
-			if err != nil {
-				glg.Fatal(err)
-			}
-			w.conn.WriteMessage(websocket.BinaryMessage, sm)
+		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+			w.conn.Publish(WORKERDISCONNECT, nil, wamp.List{w.GetPubString()}, nil)
+			w.conn.Close()
 			break
-		case syscall.SIGQUIT:
-			os.Exit(1)
 		}
 	}
 }
@@ -341,7 +277,6 @@ func NewWorker() *Worker {
 			interrupt: interrupt,
 			state:     DOWN,
 			logger:    helpers.Logger(),
-			blacklist: make(map[string]bool),
 		}
 	}
 	_priv, _pub := crypt.GenKeys()
@@ -383,6 +318,5 @@ func NewWorker() *Worker {
 		interrupt: interrupt,
 		state:     DOWN,
 		logger:    helpers.Logger(),
-		blacklist: make(map[string]bool),
 	}
 }

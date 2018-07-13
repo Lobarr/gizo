@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/gammazero/nexus/wamp"
 	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/job/batch"
@@ -187,12 +188,7 @@ func (d Dispatcher) ExecStatus(id string, hash string) (string, error) {
 //CancelExec cancels exc
 func (d Dispatcher) CancelExec(hash string) error {
 	if worker := d.GetAssignedWorker(hash); worker != "" {
-		cm, err := CancelMessage(d.GetPrivByte())
-		if err != nil {
-			return err
-		}
-		//TODO: tell worker to cancel job
-		//worker.Write(cm)
+		d.wClient.Publish(d.GetWorker(worker).CancelTopic(), nil, wamp.List{}, nil)
 		return nil
 	}
 	return errors.New("Exec not running")

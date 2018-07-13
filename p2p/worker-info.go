@@ -58,18 +58,17 @@ func (w *WorkerInfo) Busy() bool {
 	return w.GetJob() == nil
 }
 
+//JobTopic channel that dispatcher emits jobs to worker
 func (w WorkerInfo) JobTopic() string {
 	return fmt.Sprintf("worker.%v.job", w.GetPub())
 }
 
+//ResultTopic channel that worker emits result to dispatcher
 func (w WorkerInfo) ResultTopic() string {
 	return fmt.Sprintf("worker.%v.result", w.GetPub())
 }
 
+//CancelTopic channel that dispatcher emits cancel req to worker
 func (w WorkerInfo) CancelTopic() string {
 	return fmt.Sprintf("worker.%v.cancel", w.GetPub())
-}
-
-func (w WorkerInfo) DisconnectTopic() string {
-	return fmt.Sprintf("worker.%v.disconnect", w.GetPub())
 }

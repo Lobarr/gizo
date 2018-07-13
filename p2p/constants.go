@@ -37,3 +37,18 @@ var (
 	//ErrNoDispatchers occurs when there are no dispaters return from centrum
 	ErrNoDispatchers = errors.New("Centrum: no dispatchers available")
 )
+
+const (
+	//CONNFULL when the max number of workers is reached
+	CONNFULL = "CONNFULL"
+	//BLOCK when a block is sent or received
+	BLOCK = "BLOCK"
+	//BLOCKREQ block request channel
+	BLOCKREQ = "BLOCKREQ"
+	//WORKERCONNCT worker connect rpc method name
+	WORKERCONNCT = "WORKERCONNECT"
+	//WORKERDISCONNECT worker disconnect channel
+	WORKERDISCONNECT = "worker.disconnect"
+	//CONNECTED ack message for connection to dispatcher area
+	CONNECTED = "CONNECTED"
+)
