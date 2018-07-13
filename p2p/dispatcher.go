@@ -551,7 +551,11 @@ func NewDispatcher(port int) *Dispatcher {
 	wampConfig := &nx_router.Config{
 		RealmConfigs: []*nx_router.RealmConfig{
 			&nx_router.RealmConfig{
-				URI:           wamp.URI("gizo.network"),
+				URI:           wamp.URI("gizo.network.dispatchers"),
+				AnonymousAuth: true,
+			},
+			&nx_router.RealmConfig{
+				URI:           wamp.URI("gizo.network.workers"),
 				AnonymousAuth: true,
 			},
 		},
