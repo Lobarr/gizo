@@ -137,7 +137,8 @@ func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	err = d.dClient.Publish(BLOCK, nil, wamp.List{*block}, nil)
+	bBytes, _ := helpers.Serialize(block)
+	err = d.dClient.Publish(BLOCK, nil, wamp.List{string(bBytes)}, nil)
 	if err != nil {
 		glg.Fatal(err)
 	}
@@ -157,7 +158,8 @@ func (d *Dispatcher) deployJobs() {
 						d.GetWorker(w).Assign(&j)
 						glg.Info("P2P: dispatched job")
 						worker := d.GetWorker(w)
-						err := d.wClient.Publish(worker.JobTopic(), nil, wamp.List{j}, nil)
+						jBytes, _ := helpers.Serialize(j)
+						err := d.wClient.Publish(worker.JobTopic(), nil, wamp.List{string(jBytes)}, nil)
 						if err != nil {
 							glg.Fatal(err)
 						}
@@ -176,11 +178,16 @@ func (d *Dispatcher) deployJobs() {
 //BlockSubscribe subscribe and publish to block topic
 func (d *Dispatcher) BlockSubscribe(peer *client.Client) {
 	handler := func(args wamp.List, kwargs wamp.Dict, details wamp.Dict) {
-		block := args[0].(core.Block)
+		var block *core.Block
+		blk, _ := wamp.AsString(args[0])
+		err := helpers.Deserialize([]byte(blk), &block)
+		if err != nil {
+			return //TODO: handle error
+		}
 		check, _ := d.GetBC().GetBlockInfo(block.GetHeader().GetHash())
 		if check == nil {
-			d.GetBC().AddBlock(&block)
-			err := d.dClient.Publish(BLOCK, nil, wamp.List{block}, nil)
+			d.GetBC().AddBlock(block)
+			err := d.dClient.Publish(BLOCK, nil, wamp.List{blk}, nil)
 			if err != nil {
 				glg.Fatal(err)
 			}
@@ -209,7 +216,8 @@ func (d Dispatcher) WorkerDisconnect() {
 func (d Dispatcher) BlockReq(ctx context.Context, args wamp.List, kwargs, details wamp.Dict) *client.InvokeResult {
 	blockinfo, _ := d.GetBC().GetBlockInfo(args[0].(string))
 	block := blockinfo.GetBlock()
-	return &client.InvokeResult{Args: wamp.List{block}}
+	bBytes, _ := helpers.Serialize(block)
+	return &client.InvokeResult{Args: wamp.List{string(bBytes)}}
 }
 
 //WorkerConnect handles workers request to join area
@@ -222,12 +230,17 @@ func (d *Dispatcher) WorkerConnect(ctx context.Context, args wamp.List, kwargs, 
 		//handle results
 		handler := func(args wamp.List, kwargs, details wamp.Dict) {
 			d.mu.Lock()
-			exec := args[0].(job.Exec)
-			d.GetWorker(worker).GetJob().SetExec(&exec)
+			var exec *job.Exec
+			execStr, _ := wamp.AsString(args[0])
+			err := helpers.Deserialize([]byte(execStr), &exec)
+			if err != nil {
+				return //TODO: handle error's better
+			}
+			d.GetWorker(worker).GetJob().SetExec(exec)
 			d.GetWorker(worker).GetJob().ResultsChan() <- *d.GetWorker(worker).GetJob()
 			j := d.GetWorker(worker).GetJob().GetJob()
 			d.GetWorker(worker).SetJob(nil)
-			j.AddExec(exec)
+			j.AddExec(*exec)
 			d.AddJob(j)
 			//TODO: send to requester's message broker
 			if !d.GetWorker(worker).GetShut() {
@@ -427,7 +440,7 @@ func (d Dispatcher) Start() {
 	wampRouter.Upgrader.ReadBufferSize = 1000000
 	wampRouter.Upgrader.WriteBufferSize = 1000000
 	d.router.Handle("/rpc", d.GetRPC()).Methods("POST")
-	d.router.Handle("/wamp", wampRouter).Methods("POST")
+	d.router.Handle("/wamp", wampRouter)
 	status := make(map[string]string)
 	status["status"] = "running"
 	status["pub"] = d.GetPubString()
@@ -547,8 +560,13 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 				if err != nil {
 					glg.Fatal("P2P: unable to sync blockchain", err)
 				}
-				block := result.Arguments[0].(core.Block)
-				d.GetBC().AddBlock(&block)
+				blk, _ := wamp.AsString(result.Arguments[0])
+				var block *core.Block
+				err = helpers.Deserialize([]byte(blk), &block)
+				if err != nil {
+					glg.Fatal("P2P: unable to sync blockchain", err)
+				}
+				d.GetBC().AddBlock(block)
 			}
 		}
 	}

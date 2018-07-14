@@ -163,11 +163,17 @@ func (w Worker) JobSubscription() {
 			w.SetState(LIVE)
 		}
 		w.SetBusy(true)
-		item := args[0].(qItem.Item)
-		w.SetItem(item)
+		itemStr, _ := wamp.AsString(args[0])
+		var item *qItem.Item
+		err := helpers.Deserialize([]byte(itemStr), &item)
+		if err != nil {
+			return
+		}
+		w.SetItem(*item)
 		exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
 		w.item.SetExec(exec)
-		w.conn.Publish(w.ResultTopic(), nil, wamp.List{*w.item.GetExec()}, nil)
+		execBytes, _ := helpers.Serialize(w.item.GetExec())
+		w.conn.Publish(w.ResultTopic(), nil, wamp.List{string(execBytes)}, nil)
 	}
 	w.conn.Subscribe(w.JobTopic(), handler, nil)
 }
