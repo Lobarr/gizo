@@ -201,7 +201,7 @@ func (w *Worker) Dial(url string) error {
 	if err != nil {
 		return err
 	}
-	res, err := conn.Call(context.Background(), WORKERCONNCT, nil, wamp.List{w.GetPubString()}, nil, "")
+	res, err := conn.Call(context.Background(), WORKERCONNECT, nil, wamp.List{w.GetPubString()}, nil, "")
 	if err != nil {
 		return err
 	}

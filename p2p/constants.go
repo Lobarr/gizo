@@ -34,8 +34,8 @@ const (
 	BLOCK = "BLOCK"
 	//BLOCKREQ block request channel
 	BLOCKREQ = "BLOCKREQ"
-	//WORKERCONNCT worker connect rpc method name
-	WORKERCONNCT = "WORKERCONNECT"
+	//WORKERCONNECT worker connect rpc method name
+	WORKERCONNECT = "WORKERCONNECT"
 	//WORKERDISCONNECT worker disconnect channel
 	WORKERDISCONNECT = "worker.disconnect"
 	//CONNECTED ack message for connection to dispatcher area

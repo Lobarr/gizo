@@ -418,7 +418,7 @@ func (d Dispatcher) Start() {
 	if err = d.dClient.Register(BLOCKREQ, d.BlockReq, nil); err != nil {
 		glg.Fatal(err)
 	}
-	if err = d.wClient.Register(WORKERCONNCT, d.WorkerConnect, nil); err != nil {
+	if err = d.wClient.Register(WORKERCONNECT, d.WorkerConnect, nil); err != nil {
 		glg.Fatal(err)
 	}
 	d.RPC()
@@ -515,13 +515,13 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 		if err == nil && addr["pub"] != d.GetPubString() {
 			var v Version
 			wsURL := fmt.Sprintf("ws://%v:%v/wamp", addr["ip"], addr["port"])
-			versionURL := fmt.Sprintf("http://%v:%v/rpc", addr["ip"], addr["port"])
+			versionURL := fmt.Sprintf("http://%v:%v/version", addr["ip"], addr["port"])
 			conn, err := client.ConnectNet(wsURL, client.Config{
 				Realm: DISPATCHERREALM,
 			})
 
 			if err != nil {
-				continue
+				glg.Fatal(err)
 			}
 			d.AddPeer(addr["pub"], conn)
 			go d.BlockSubscribe(conn)
@@ -529,24 +529,23 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 			if err != nil {
 				glg.Fatal(err)
 			}
-			if syncVersion.GetHeight() < v.GetHeight() {
+			if syncVersion.GetHeight() <= v.GetHeight() {
 				syncVersion = &v
 				syncPeer = conn
 			}
 		}
 	}
-	if syncVersion.GetHeight() != 0 {
-		glg.Warn("Dispatcher: node sync in progress")
+	glg.Warn("Dispatcher: node sync in progress")
+	if syncVersion.GetHeight() >= 0 {
 		blocks, err := d.GetBC().GetBlockHashesHex()
 		if err != nil {
 			glg.Fatal(err)
 		}
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
-				result, err := syncPeer.Call(context.Background(), "BlockReq", nil, wamp.List{hash}, nil, "")
+				result, err := syncPeer.Call(context.Background(), BLOCKREQ, nil, wamp.List{hash}, nil, "")
 				if err != nil {
-					syncVersion.Blocks = append(syncVersion.Blocks, hash)
-					continue
+					glg.Fatal("P2P: unable to sync blockchain", err)
 				}
 				block := result.Arguments[0].(core.Block)
 				d.GetBC().AddBlock(&block)
