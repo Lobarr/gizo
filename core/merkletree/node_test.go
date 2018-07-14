@@ -27,7 +27,9 @@ func TestIsLeaf(t *testing.T) {
 
 func TestIsEmpty(t *testing.T) {
 	n := merkletree.MerkleNode{}
-	assert.True(t, n.IsEmpty())
+	empty, err := n.IsEmpty()
+	assert.NoError(t, err)
+	assert.True(t, empty)
 }
 
 func TestIsEqual(t *testing.T) {
@@ -43,6 +45,7 @@ func TestMergeJobs(t *testing.T) {
 	priv, _ := crypt.GenKeys()
 	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
 	n, _ := merkletree.NewNode(*j, nil, nil)
-	merged := merkletree.MergeJobs(*n, *n)
+	merged, err := merkletree.MergeJobs(*n, *n)
+	assert.NoError(t, err)
 	assert.Equal(t, j.GetID()+j.GetID(), merged.GetID())
 }

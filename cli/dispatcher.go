@@ -22,8 +22,8 @@ var dispatcherCmd = &cobra.Command{
 		if os.Getenv("ENV") == "dev" {
 			glg.Log("Core: using dev blockchain")
 		}
+		d := p2p.NewDispatcher(port)
 		if interactive {
-			d := p2p.NewDispatcher(port)
 			go d.Start()
 			shell := ishell.New()
 			shell.Println("--- Gizo Interactive shell ---")
@@ -36,7 +36,6 @@ var dispatcherCmd = &cobra.Command{
 			})
 			shell.Run()
 		} else {
-			d := p2p.NewDispatcher(port)
 			d.Start()
 		}
 	},

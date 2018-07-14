@@ -7,15 +7,12 @@ const (
 	NodeDB = "%s.nodeinfo.db"
 	//NodeBucket bolt db bucket
 	NodeBucket = "node"
-	//DispatcherScheme scheme of gizo dispatcher url
-	DispatcherScheme = "gizo"
 	//MaxWorkers number of workers allowed per standard area
 	MaxWorkers = 128
 	//DefaultPort default port
 	DefaultPort = 9999
 	//CentrumURL url of centrum api
-	// CentrumURL = "https://centrum-dev.herokuapp.com"
-	CentrumURL = "https://4a71255e.ngrok.io"
+	CentrumURL = "https://centrum-dev.herokuapp.com"
 	//GizoVersion version of gizo
 	GizoVersion = 1
 )

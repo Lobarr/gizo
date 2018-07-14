@@ -506,7 +506,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	dispatchers, ok := res["dispatchers"]
 	if !ok {
 		glg.Warn(ErrNoDispatchers)
-		// d.GetBC().InitGenesisBlock(d.GetPubString())
+		d.GetBC().InitGenesisBlock(d.GetPubString())
 		return
 	}
 	for _, dispatcher := range dispatchers.([]string) {
@@ -640,7 +640,6 @@ func NewDispatcher(port int) *Dispatcher {
 		}
 		centrum.SetToken(token)
 		bc := core.CreateBlockChain(hex.EncodeToString(pub))
-		// bc.InitGenesisBlock(hex.EncodeToString(pub))
 		jc := cache.NewJobCache(bc)
 		return &Dispatcher{
 			IP:        ip,
@@ -686,6 +685,7 @@ func NewDispatcher(port int) *Dispatcher {
 
 		benchBytes, err := helpers.Serialize(bench)
 		if err != nil {
+			glg.Log("here")
 			glg.Fatal(err)
 		}
 		if err = b.Put([]byte("benchmark"), benchBytes); err != nil {

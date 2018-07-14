@@ -88,7 +88,7 @@ func (bc *BlockChain) GetBlockInfo(hash string) (*BlockInfo, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err //! handle db failure error
+		return nil, err
 	}
 	if blockinfo != nil {
 		return blockinfo, nil
@@ -245,19 +245,24 @@ func (bc *BlockChain) AddBlock(block *Block) error {
 		if err != nil {
 			return err
 		}
-		err = b.Put(hashBytes, biBytes)
-		if err != nil {
+
+		if err = b.Put(hashBytes, biBytes); err != nil {
 			return err
 		}
 
-		latest, err := bc.GetBlockInfo(hex.EncodeToString(bc.getTip()))
-		if err != nil {
-			return err
-		}
-
-		if block.GetHeight() > latest.GetHeight() {
-
-			if err := b.Put([]byte("l"), hashBytes); err != nil {
+		if bc.getTip() != nil {
+			latest, err := bc.GetBlockInfo(hex.EncodeToString(bc.getTip()))
+			if err != nil {
+				return err
+			}
+			if block.GetHeight() > latest.GetHeight() {
+				if err := b.Put([]byte("l"), hashBytes); err != nil {
+					return err
+				}
+				bc.setTip(hashBytes)
+			}
+		} else {
+			if err = b.Put([]byte("l"), hashBytes); err != nil {
 				return err
 			}
 			bc.setTip(hashBytes)
@@ -429,6 +434,7 @@ func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 
 //InitGenesisBlock creates genesis block
 func (bc *BlockChain) InitGenesisBlock(nodeID string) {
+	bc.logger.Log("Core: Creating genesis block")
 	bc.AddBlock(GenesisBlock(nodeID))
 }
 
@@ -465,45 +471,18 @@ func CreateBlockChain(nodeID string) *BlockChain {
 			logger: helpers.Logger(),
 		}
 	}
-	genesis := GenesisBlock(nodeID)
-	genesisHash, err := hex.DecodeString(genesis.GetHeader().GetHash())
-	if err != nil {
-		logger.Fatal(err)
-	}
+
 	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 	if err != nil {
 		logger.Fatal(err)
 	}
-	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucket([]byte(BlockBucket))
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucket([]byte(BlockBucket))
 		if err != nil {
-			logger.Fatal(err)
-		}
-		blockinfo := BlockInfo{
-			Header:    genesis.GetHeader(),
-			Height:    genesis.GetHeight(),
-			TotalJobs: uint(len(genesis.GetNodes())),
-			FileName:  genesis.fileStats().Name(),
-			FileSize:  genesis.fileStats().Size(),
-		}
-		blockinfoBytes, err := helpers.Serialize(blockinfo)
-		if err != nil {
-			logger.Fatal(err)
-		}
-
-		if err = b.Put(genesisHash, blockinfoBytes); err != nil {
-			logger.Fatal(err)
-		}
-
-		//latest block on the chain
-		if err = b.Put([]byte("l"), genesisHash); err != nil {
 			logger.Fatal(err)
 		}
 		return nil
 	})
-	if err != nil {
-		logger.Fatal(err)
-	}
 	bc := &BlockChain{
 		tip:    nil,
 		db:     db,

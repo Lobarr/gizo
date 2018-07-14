@@ -128,7 +128,6 @@
   packages = [
     "io",
     "rpc",
-    "rpc/websocket",
     "util"
   ]
   revision = "b2b25423cffe1829254b1e4fbc6f0a7360dd626b"
@@ -313,6 +312,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5b7d540fe6c41e6e7eb59c8079ab14c1c83086b2a72b3430b8a3cc174f65e29d"
+  inputs-digest = "51dd2b60226b60595b88b9f2829d0ab8de3dc742079188dcd82676910f3711cc"
   solver-name = "gps-cdcl"
   solver-version = 1

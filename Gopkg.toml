@@ -46,14 +46,6 @@
   version = "1.6.1"
 
 [[constraint]]
-  name = "github.com/gorilla/rpc"
-  version = "1.1.0"
-
-[[constraint]]
-  name = "github.com/gorilla/websocket"
-  version = "1.2.0"
-
-[[constraint]]
   name = "github.com/joho/godotenv"
   version = "1.2.0"
 
@@ -69,21 +61,9 @@
   name = "github.com/stretchr/testify"
   version = "1.1.4"
 
-[[constraint]]
-  name = "gopkg.in/olahol/melody.v1"
-  version = "1.0.0"
-
 [prune]
   go-tests = true
   unused-packages = true
-
-[[constraint]]
-  name = "github.com/osamingo/jsonrpc"
-  version = "2.1.0"
-
-[[constraint]]
-  name = "github.com/labstack/echo"
-  version = "3.3.5"
 
 [[constraint]]
   branch = "master"
