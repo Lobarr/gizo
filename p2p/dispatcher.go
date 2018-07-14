@@ -54,9 +54,9 @@ var (
 
 //Dispatcher dispatcher node
 type Dispatcher struct {
-	IP        string
-	Port      uint   //port
-	Pub       []byte //public key of the node
+	ip        string
+	port      uint   //port
+	pub       []byte //public key of the node
 	priv      []byte //private key of the node
 	uptime    int64  //time since node has been up
 	jobPQ     *queue.JobPriorityQueue
@@ -280,22 +280,22 @@ func (d Dispatcher) GetAssignedWorker(hash string) string {
 
 //GetIP returns ip address of node
 func (d Dispatcher) GetIP() string {
-	return d.IP
+	return d.ip
 }
 
 //SetIP sets ip address of node
 func (d *Dispatcher) SetIP(ip string) {
-	d.IP = ip
+	d.ip = ip
 }
 
 //GetPubByte returns public key of node as bytes
 func (d Dispatcher) GetPubByte() []byte {
-	return d.Pub
+	return d.pub
 }
 
 //GetPubString returns public key of node as bytes
 func (d Dispatcher) GetPubString() string {
-	return hex.EncodeToString(d.Pub)
+	return hex.EncodeToString(d.pub)
 }
 
 //GetPrivByte returns private key of node as bytes
@@ -340,7 +340,7 @@ func (d Dispatcher) GetBC() *core.BlockChain {
 
 //GetPort returns node port
 func (d Dispatcher) GetPort() int {
-	return int(d.Port)
+	return int(d.port)
 }
 
 //GetUptime returns uptime of node
@@ -403,6 +403,10 @@ func (d Dispatcher) watchInterrupt() {
 
 //Start spins up services
 func (d Dispatcher) Start() {
+	go d.deployJobs()
+	go d.watchWriteQ()
+	go d.watchInterrupt()
+	d.GetDispatchersAndSync()
 	verify, err := d.GetBC().Verify()
 	if err != nil {
 		glg.Fatal(err)
@@ -410,10 +414,6 @@ func (d Dispatcher) Start() {
 	if !verify {
 		glg.Fatal("Dispatcher: blockchain not verified")
 	}
-	go d.deployJobs()
-	go d.watchWriteQ()
-	go d.watchInterrupt()
-	d.GetDispatchersAndSync()
 	d.WorkerDisconnect()
 	if err = d.dClient.Register(BLOCKREQ, d.BlockReq, nil); err != nil {
 		glg.Fatal(err)
@@ -466,6 +466,7 @@ func (d Dispatcher) Start() {
 			d.Register()
 		}
 	}
+	d.jc = cache.NewJobCache(d.GetBC())
 	fmt.Println(http.ListenAndServe(":"+strconv.FormatInt(int64(d.GetPort()), 10), d.router))
 }
 
@@ -516,7 +517,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 			wsURL := fmt.Sprintf("ws://%v:%v/wamp", addr["ip"], addr["port"])
 			versionURL := fmt.Sprintf("http://%v:%v/rpc", addr["ip"], addr["port"])
 			conn, err := client.ConnectNet(wsURL, client.Config{
-				Realm: "gizo.network.dispatcher",
+				Realm: DISPATCHERREALM,
 			})
 
 			if err != nil {
@@ -577,11 +578,11 @@ func NewDispatcher(port int) *Dispatcher {
 	wampConfig := &nx_router.Config{
 		RealmConfigs: []*nx_router.RealmConfig{
 			&nx_router.RealmConfig{
-				URI:           wamp.URI("gizo.network.dispatcher"),
+				URI:           wamp.URI(DISPATCHERREALM),
 				AnonymousAuth: true,
 			},
 			&nx_router.RealmConfig{
-				URI:           wamp.URI("gizo.network.worker"),
+				URI:           wamp.URI(WORKERREALM),
 				AnonymousAuth: true,
 			},
 		},
@@ -593,7 +594,7 @@ func NewDispatcher(port int) *Dispatcher {
 	}
 
 	dClient, err := client.ConnectLocal(nxr, client.Config{
-		Realm: "gizo.network.dispatcher",
+		Realm: DISPATCHERREALM,
 	})
 
 	if err != nil {
@@ -601,7 +602,7 @@ func NewDispatcher(port int) *Dispatcher {
 	}
 
 	wClient, err := client.ConnectLocal(nxr, client.Config{
-		Realm: "gizo.network.worker",
+		Realm: WORKERREALM,
 	})
 
 	if err != nil {
@@ -640,30 +641,29 @@ func NewDispatcher(port int) *Dispatcher {
 		}
 		centrum.SetToken(token)
 		bc := core.CreateBlockChain(hex.EncodeToString(pub))
-		jc := cache.NewJobCache(bc)
 		return &Dispatcher{
-			IP:        ip,
-			Pub:       pub,
+			ip:        ip,
+			port:      uint(port),
+			pub:       pub,
 			priv:      priv,
-			Port:      uint(port),
 			uptime:    time.Now().Unix(),
-			bench:     bench,
 			jobPQ:     queue.NewJobPriorityQueue(),
 			workers:   make(map[string]*WorkerInfo),
 			workerPQ:  NewWorkerPriorityQueue(),
 			peers:     make(map[string]*client.Client),
-			jc:        jc,
+			bench:     bench,
+			wamp:      nxr,
+			rpc:       rpc.NewHTTPService(),
+			router:    mux.NewRouter(),
 			bc:        bc,
 			db:        db,
-			router:    mux.NewRouter(),
-			wamp:      nxr,
 			mu:        new(sync.Mutex),
+			jobs:      make(map[string]job.Job),
 			interrupt: interrupt,
 			writeQ:    lane.NewQueue(),
 			centrum:   centrum,
 			discover:  discover,
 			new:       false,
-			jobs:      make(map[string]job.Job),
 			dClient:   dClient,
 			wClient:   wClient,
 		}
@@ -706,30 +706,29 @@ func NewDispatcher(port int) *Dispatcher {
 		glg.Fatal(err)
 	}
 	bc := core.CreateBlockChain(hex.EncodeToString(pub))
-	jc := cache.NewJobCache(bc)
 	return &Dispatcher{
-		IP:        ip,
-		Pub:       pub,
+		ip:        ip,
+		port:      uint(port),
+		pub:       pub,
 		priv:      priv,
-		Port:      uint(port),
 		uptime:    time.Now().Unix(),
-		bench:     bench,
 		jobPQ:     queue.NewJobPriorityQueue(),
 		workers:   make(map[string]*WorkerInfo),
 		workerPQ:  NewWorkerPriorityQueue(),
 		peers:     make(map[string]*client.Client),
-		jc:        jc,
+		bench:     bench,
+		wamp:      nxr,
+		rpc:       rpc.NewHTTPService(),
+		router:    mux.NewRouter(),
 		bc:        bc,
 		db:        db,
-		router:    mux.NewRouter(),
-		wamp:      nxr,
 		mu:        new(sync.Mutex),
+		jobs:      make(map[string]job.Job),
 		interrupt: interrupt,
 		writeQ:    lane.NewQueue(),
 		centrum:   centrum,
 		discover:  discover,
 		new:       true,
-		jobs:      make(map[string]job.Job),
 		dClient:   dClient,
 		wClient:   wClient,
 	}

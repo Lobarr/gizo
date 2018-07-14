@@ -28,14 +28,6 @@ const (
 	LIVE = "LIVE"
 	// dispatcher - when an adjacency is created and topology table, peer table and blockchain have been sync
 	FULL = "FULL"
-)
-
-var (
-	//ErrNoDispatchers occurs when there are no dispaters return from centrum
-	ErrNoDispatchers = errors.New("Centrum: no dispatchers available")
-)
-
-const (
 	//CONNFULL when the max number of workers is reached
 	CONNFULL = "CONNFULL"
 	//BLOCK when a block is sent or received
@@ -48,4 +40,15 @@ const (
 	WORKERDISCONNECT = "worker.disconnect"
 	//CONNECTED ack message for connection to dispatcher area
 	CONNECTED = "CONNECTED"
+	//WORKERREALM realm worker nodes connect to
+	WORKERREALM = "gizo.network.worker"
+	//DISPATCHERREALM realm dispatcher nodes connect to
+	DISPATCHERREALM = "gizo.network.dispatcher"
 )
+
+var (
+	//ErrNoDispatchers occurs when there are no dispaters return from centrum
+	ErrNoDispatchers = errors.New("Centrum: no dispatchers available")
+)
+
+const ()

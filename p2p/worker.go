@@ -196,7 +196,7 @@ func (w *Worker) Connect() {
 //Dial attempts ws connections to dispatcher
 func (w *Worker) Dial(url string) error {
 	conn, err := client.ConnectNet(url, client.Config{
-		Realm: "gizo.network.worker",
+		Realm: WORKERREALM,
 	})
 	if err != nil {
 		return err

@@ -434,7 +434,6 @@ func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 
 //InitGenesisBlock creates genesis block
 func (bc *BlockChain) InitGenesisBlock(nodeID string) {
-	bc.logger.Log("Core: Creating genesis block")
 	bc.AddBlock(GenesisBlock(nodeID))
 }
 
