@@ -515,10 +515,14 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	if err != nil {
 		glg.Fatal(err)
 	}
+	blocks, err := d.GetBC().GetBlockHashesHex()
+	if err != nil {
+		glg.Fatal(err)
+	}
 	syncVersion := new(Version)
 	syncPeer := new(client.Client)
 	dispatchers, ok := res["dispatchers"]
-	if !ok {
+	if !ok && len(blocks) == 0 {
 		glg.Warn(ErrNoDispatchers)
 		d.GetBC().InitGenesisBlock(d.GetPubString())
 		return
@@ -550,10 +554,6 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	}
 	glg.Warn("Dispatcher: node sync in progress")
 	if syncVersion.GetHeight() >= 0 {
-		blocks, err := d.GetBC().GetBlockHashesHex()
-		if err != nil {
-			glg.Fatal(err)
-		}
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
 				result, err := syncPeer.Call(context.Background(), BLOCKREQ, nil, wamp.List{hash}, nil, "")
