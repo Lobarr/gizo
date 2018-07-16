@@ -100,7 +100,7 @@ func (d Dispatcher) GetPeers() map[string]*client.Client {
 func (d Dispatcher) watchWriteQ() {
 	//TODO: write to bc if it's taking too long
 	for {
-		if d.GetWriteQ().Empty() == false {
+		if !d.GetWriteQ().Empty() {
 			jobs := d.GetWriteQ().Dequeue()
 			d.WriteJobsAndPublish(jobs.(map[string]job.Job))
 		}
@@ -147,8 +147,8 @@ func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 //assigns next job in the queue to the next available worker
 func (d *Dispatcher) deployJobs() {
 	for {
-		if d.GetWorkerPQ().getPQ().Empty() == false {
-			if d.GetJobPQ().GetPQ().Empty() == false {
+		if !d.GetWorkerPQ().getPQ().Empty() {
+			if !d.GetJobPQ().GetPQ().Empty() {
 				d.mu.Lock()
 				w := d.GetWorkerPQ().Pop()
 				if !d.GetWorker(w).GetShut() {
@@ -223,7 +223,7 @@ func (d Dispatcher) BlockReq(ctx context.Context, args wamp.List, kwargs, detail
 //WorkerConnect handles workers request to join area
 func (d *Dispatcher) WorkerConnect(ctx context.Context, args wamp.List, kwargs, details wamp.Dict) *client.InvokeResult {
 	if len(d.GetWorkers()) < MaxWorkers {
-		worker := args[0].(string)
+		worker, _ := wamp.AsString(args[0])
 		d.AddWorker(worker)
 		d.centrum.ConnectWorker()
 		d.GetWorkerPQ().Push(worker, 0)
@@ -406,7 +406,6 @@ func (d Dispatcher) watchInterrupt() {
 			d.dClient.Close()
 			d.wClient.Close()
 			d.wamp.Close()
-			time.Sleep(time.Second * 3) // give neighbors and workers 3 seconds to disconnect
 			os.Exit(0)
 		case syscall.SIGQUIT:
 			os.Exit(1)
@@ -522,9 +521,11 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 	syncVersion := new(Version)
 	syncPeer := new(client.Client)
 	dispatchers, ok := res["dispatchers"]
-	if !ok && len(blocks) == 0 {
+	if !ok {
 		glg.Warn(ErrNoDispatchers)
-		d.GetBC().InitGenesisBlock(d.GetPubString())
+		if len(blocks) == 0 {
+			d.GetBC().InitGenesisBlock(d.GetPubString())
+		}
 		return
 	}
 	for _, dispatcher := range dispatchers.([]string) {
@@ -552,7 +553,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 			}
 		}
 	}
-	glg.Warn("Dispatcher: node sync in progress")
+	glg.Info("Dispatcher: node sync in progress")
 	if syncVersion.GetHeight() >= 0 {
 		for _, hash := range syncVersion.GetBlocks() {
 			if !funk.ContainsString(blocks, hash) {
@@ -639,7 +640,7 @@ func NewDispatcher(port int) *Dispatcher {
 
 	if helpers.FileExists(dbFile) {
 		var priv, pub []byte
-		glg.Warn("Dispatcher: using existing keypair and benchmark")
+		glg.Info("Dispatcher: using existing keypair and benchmark")
 		db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
 		if err != nil {
 			glg.Fatal(err)

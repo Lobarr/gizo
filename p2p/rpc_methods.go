@@ -3,6 +3,7 @@ package p2p
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gammazero/nexus/wamp"
@@ -500,12 +501,14 @@ func (d Dispatcher) Solo(jr string) (string, error) {
 	var request job.Request
 	err := helpers.Deserialize([]byte(jr), &request)
 	if err != nil {
+		fmt.Println("broke while deserializing")
 		return "", err
 	}
 	solo := solo.NewSolo(request, d.GetBC(), d.GetJobPQ(), d.GetJC())
 	solo.Dispatch()
 	rBytes, err := helpers.Serialize(solo.Result())
 	if err != nil {
+		fmt.Println("broke while serializing result")
 		return "", err
 	}
 	return string(rBytes), nil
