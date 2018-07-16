@@ -157,8 +157,8 @@ func (w Worker) CancelJobSubscription() {
 
 //JobSubscription handles job execution
 func (w Worker) JobSubscription() {
-	glg.Log("P2P: received job")
 	handler := func(args wamp.List, kwargs, details wamp.Dict) {
+		glg.Log("P2P: received job")
 		if w.GetState() != LIVE {
 			w.SetState(LIVE)
 		}
@@ -168,12 +168,13 @@ func (w Worker) JobSubscription() {
 		err := helpers.Deserialize([]byte(itemStr), &item)
 		if err != nil {
 			return
+		} else {
+			w.SetItem(*item)
+			exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
+			w.item.SetExec(exec)
+			execBytes, _ := helpers.Serialize(w.item.GetExec())
+			w.conn.Publish(w.ResultTopic(), nil, wamp.List{string(execBytes)}, nil)
 		}
-		w.SetItem(*item)
-		exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
-		w.item.SetExec(exec)
-		execBytes, _ := helpers.Serialize(w.item.GetExec())
-		w.conn.Publish(w.ResultTopic(), nil, wamp.List{string(execBytes)}, nil)
 	}
 	w.conn.Subscribe(w.JobTopic(), handler, nil)
 }
@@ -190,6 +191,7 @@ func (w *Worker) Connect() {
 		if err == nil {
 			url := fmt.Sprintf("ws://%v:%v/wamp", addr["ip"], addr["port"])
 			if err = w.Dial(url); err == nil {
+				w.logger.Log("Worker: connected to dispatcher")
 				w.SetDispatcher(addr["pub"])
 				return
 			}
