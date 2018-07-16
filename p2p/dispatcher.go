@@ -566,6 +566,10 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 				if err != nil {
 					glg.Fatal("P2P: unable to sync blockchain", err)
 				}
+				err = block.Export()
+				if err != nil {
+					glg.Fatal(err)
+				}
 				d.GetBC().AddBlock(block)
 			}
 		}
