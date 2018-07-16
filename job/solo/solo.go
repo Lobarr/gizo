@@ -117,7 +117,6 @@ func (s *Solo) Dispatch() {
 		j, err = s.getBC().FindJob(s.GetJob().GetID())
 	}
 	if err != nil {
-		glg.Warn("Batch: Unable to find job - " + s.GetJob().GetID())
 		s.GetJob().GetExec()[0].SetErr("Batch: Unable to find job - " + s.GetJob().GetID())
 	} else {
 		if cancelled == true {
