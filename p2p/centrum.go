@@ -3,51 +3,62 @@ package p2p
 import (
 	"errors"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/dghubble/sling"
 	"github.com/kpango/glg"
 )
 
 var (
-	s          = sling.New().Base(CentrumURL).Add("User-Agent", "Gizo Node")
+	s = sling.New().Base(CentrumURL).Add("User-Agent", "Gizo Node")
+	//ErrNoToken occurs when node has not token
 	ErrNoToken = errors.New("Centrum: No token in struct")
+	//ErrUnableToConnect occurs when node is unable to connect to centrum
+	ErrUnableToConnect = errors.New("Centrum: Unable to connect to centrum")
 )
 
 type (
+	//DispatcherBody message sent to centrum
 	DispatcherBody struct {
 		Pub  string `url:"pub"`
 		IP   string `url:"ip"`
 		Port int    `url:"port"`
 	}
 
+	//Centrum communication with centrum
 	Centrum struct {
-		token string // token received from centrum
+		token  string // token received from centrum
+		logger *glg.Glg
 	}
 )
 
+//NewCentrum initlializes centrum
 func NewCentrum() *Centrum {
-	return new(Centrum)
+	return &Centrum{logger: helpers.Logger()}
 }
 
+//GetToken returns token
 func (c Centrum) GetToken() string {
 	return c.token
 }
 
+//SetToken sets dispatcher token
 func (c *Centrum) SetToken(token string) {
 	c.token = token
 }
 
 //GetDispatchers returns active dispatchers
-func (c Centrum) GetDispatchers() map[string]interface{} {
+func (c Centrum) GetDispatchers() (map[string]interface{}, error) {
 	var dispatchers []string
 	temp := make(map[string]interface{})
 	_, err := s.New().Get("/v1/dispatchers").Receive(&dispatchers, &temp)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, ErrUnableToConnect
 	}
 	if len(dispatchers) != 0 {
 		temp["dispatchers"] = dispatchers
 	}
-	return temp
+	return temp, nil
 }
 
 //NewDisptcher registers dispatcher in centrum
@@ -56,7 +67,7 @@ func (c *Centrum) NewDisptcher(pub, ip string, port int) error {
 	res := make(map[string]interface{})
 	_, err := s.Post("/v1/dispatcher").BodyForm(data).Receive(&res, &res)
 	if err != nil {
-		glg.Fatal(err)
+		return ErrUnableToConnect
 	}
 	token, ok := res["token"]
 	if !ok {
@@ -74,7 +85,7 @@ func (c Centrum) ConnectWorker() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/connect").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, ErrUnableToConnect
 	}
 	return res, nil
 }
@@ -87,23 +98,24 @@ func (c Centrum) DisconnectWorker() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/disconnect").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, ErrUnableToConnect
 	}
 	return res, nil
 }
 
 //Wake changes node status to active in centrum
-func (c Centrum) Wake() (map[string]interface{}, error) {
+func (c Centrum) Wake(pub, ip string, port int) (map[string]interface{}, error) {
 	//TODO: create new worker if wake fails
 	if c.GetToken() == "" {
 		return nil, ErrNoToken
 	}
+	data := DispatcherBody{Pub: pub, IP: ip, Port: port}
 	res := make(map[string]interface{})
-	_, err := s.Patch("/v1/dispatcher/wake").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
+	_, err := s.Patch("/v1/dispatcher/wake").BodyForm(data).Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, ErrUnableToConnect
 	}
-	glg.Warn("Centrum: waking node")
+	c.logger.Log("Centrum: waking node")
 	return res, nil
 }
 
@@ -115,8 +127,8 @@ func (c Centrum) Sleep() (map[string]interface{}, error) {
 	res := make(map[string]interface{})
 	_, err := s.Patch("/v1/dispatcher/sleep").Set("x-gizo-token", c.GetToken()).Receive(&res, &res)
 	if err != nil {
-		glg.Fatal(err)
+		return nil, ErrUnableToConnect
 	}
-	glg.Warn("Centrum: sleeping node")
+	c.logger.Log("Centrum: sleeping node")
 	return res, nil
 }

@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gizo-network/gizo/helpers"
+
 	"github.com/gizo-network/gizo/cache"
 
 	"github.com/kpango/glg"
@@ -15,20 +17,21 @@ import (
 	"github.com/gizo-network/gizo/job/queue/qItem"
 )
 
-//Chain - Jobs executed one after the other
+//Chain - jobs executed one after the other
 type Chain struct {
-	jobs   []job.JobRequestMultiple
+	jobs   []job.Request
 	bc     *core.BlockChain
 	pq     *queue.JobPriorityQueue
 	jc     *cache.JobCache
-	result []job.JobRequestMultiple
+	result []job.Request
+	logger *glg.Glg
 	length int
 	status string
 	cancel chan struct{}
 }
 
 //NewChain returns chain
-func NewChain(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
+func NewChain(j []job.Request, bc *core.BlockChain, pq *queue.JobPriorityQueue, jc *cache.JobCache) (*Chain, error) {
 	length := 0
 	for _, jr := range j {
 		length += len(jr.GetExec())
@@ -43,24 +46,27 @@ func NewChain(j []job.JobRequestMultiple, bc *core.BlockChain, pq *queue.JobPrio
 		jc:     jc,
 		length: length,
 		cancel: make(chan struct{}),
+		logger: helpers.Logger(),
 	}
 	return c, nil
 }
 
+//Cancel terminates exec
 func (c *Chain) Cancel() {
 	c.cancel <- struct{}{}
 }
 
+//GetCancelChan returns cancel channel
 func (c Chain) GetCancelChan() chan struct{} {
 	return c.cancel
 }
 
 //GetJobs returns jobs
-func (c Chain) GetJobs() []job.JobRequestMultiple {
+func (c Chain) GetJobs() []job.Request {
 	return c.jobs
 }
 
-func (c *Chain) setJobs(j []job.JobRequestMultiple) {
+func (c *Chain) setJobs(j []job.Request) {
 	c.jobs = j
 }
 
@@ -93,12 +99,12 @@ func (c Chain) getJC() *cache.JobCache {
 	return c.jc
 }
 
-func (c *Chain) setResults(res []job.JobRequestMultiple) {
+func (c *Chain) setResults(res []job.Request) {
 	c.result = res
 }
 
 //Result returns result
-func (c Chain) Result() []job.JobRequestMultiple {
+func (c Chain) Result() []job.Request {
 	return c.result
 }
 
@@ -116,7 +122,6 @@ func (c *Chain) Dispatch() {
 		select {
 		case <-c.cancel:
 			cancelled = true
-			glg.Warn("Chain: Cancelling jobs")
 			for _, jr := range c.GetJobs() {
 				for _, exec := range jr.GetExec() {
 					if exec.GetStatus() == job.RUNNING || exec.GetStatus() == job.RETRYING {
@@ -144,25 +149,28 @@ func (c *Chain) Dispatch() {
 			j, err = c.getBC().FindJob(jr.GetID())
 		}
 		if err != nil {
-			glg.Warn("Chain: Unable to find job - " + jr.GetID())
 			for _, exec := range jr.GetExec() {
 				exec.SetErr("Unable to find job - " + jr.GetID())
 			}
 		} else {
 			for i := 0; i < len(jr.GetExec()); i++ {
+				task, err := j.GetTask()
+				if err != nil {
+					jr.GetExec()[i].SetErr(err)
+				}
 				if cancelled == true {
 					results = append(results, qItem.NewItem(job.Job{
 						ID:             j.GetID(),
 						Hash:           j.GetHash(),
 						Name:           j.GetName(),
-						Task:           j.GetTask(),
+						Task:           task,
 						Signature:      j.GetSignature(),
 						SubmissionTime: j.GetSubmissionTime(),
 						Private:        j.GetPrivate(),
 					}, jr.GetExec()[i], res, c.GetCancelChan()))
 				} else {
 					if jr.GetExec()[i].GetExecutionTime() != 0 {
-						glg.Warn("Chain: Queuing in " + strconv.FormatFloat(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
+						c.logger.Info("Chain: Queuing in " + strconv.FormatFloat(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Seconds(), 'f', -1, 64) + " nanoseconds")
 						time.Sleep(time.Nanosecond * time.Duration(time.Unix(jr.GetExec()[i].GetExecutionTime(), 0).Sub(time.Now()).Nanoseconds()))
 					}
 					c.getPQ().Push(*j, jr.GetExec()[i], res, c.GetCancelChan()) //? queues first job
@@ -173,9 +181,9 @@ func (c *Chain) Dispatch() {
 	}
 	close(res)
 
-	var grouped []job.JobRequestMultiple
+	var grouped []job.Request
 	for _, jID := range jobIDs {
-		var req job.JobRequestMultiple
+		var req job.Request
 		req.SetID(jID)
 		for _, item := range results {
 			if item.GetID() == jID {

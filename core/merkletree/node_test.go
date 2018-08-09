@@ -1,7 +1,6 @@
 package merkletree_test
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/gizo-network/gizo/crypt"
@@ -13,36 +12,40 @@ import (
 
 func TestNewNode(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	assert.NotNil(t, n.GetHash(), "empty hash value")
 	assert.NotNil(t, n, "returned empty node")
 }
 
-func TestMarshalMerkleNode(t *testing.T) {
-	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	b, err := n.Serialize()
-	assert.NoError(t, err)
-	assert.NotNil(t, b)
-}
-
 func TestIsLeaf(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
 	assert.True(t, n.IsLeaf())
 }
 
 func TestIsEmpty(t *testing.T) {
 	n := merkletree.MerkleNode{}
-	assert.True(t, n.IsEmpty())
+	empty, err := n.IsEmpty()
+	assert.NoError(t, err)
+	assert.True(t, empty)
 }
 
 func TestIsEqual(t *testing.T) {
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	n := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	assert.True(t, n.IsEqual(*n))
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
+	equal, err := n.IsEqual(*n)
+	assert.NoError(t, err)
+	assert.True(t, equal)
+}
+
+func TestMergeJobs(t *testing.T) {
+	priv, _ := crypt.GenKeys()
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	n, _ := merkletree.NewNode(*j, nil, nil)
+	merged, err := merkletree.MergeJobs(*n, *n)
+	assert.NoError(t, err)
+	assert.Equal(t, j.GetID()+j.GetID(), merged.GetID())
 }

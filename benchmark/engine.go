@@ -1,12 +1,12 @@
 package benchmark
 
 import (
-	"encoding/hex"
-	"encoding/json"
 	"math/rand"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/gizo-network/gizo/helpers"
 
 	"github.com/gizo-network/gizo/crypt"
 
@@ -19,25 +19,9 @@ import (
 
 //Engine hold's an array of benchmarks and a score of the node
 type Engine struct {
-	Data  []Benchmark
-	Score float64
-}
-
-func (b Engine) Serialize() []byte {
-	temp, err := json.Marshal(b)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
-}
-
-func DeserializeBenchmarkEngine(b []byte) Engine {
-	var temp Engine
-	err := json.Unmarshal(b, &temp)
-	if err != nil {
-		glg.Fatal(err)
-	}
-	return temp
+	Data   []Benchmark
+	Score  float64
+	logger *glg.Glg
 }
 
 func (b *Engine) setScore(s float64) {
@@ -62,44 +46,42 @@ func (b Engine) GetData() []Benchmark {
 func (b Engine) block(difficulty uint8) *core.Block {
 	//random data
 	priv, _ := crypt.GenKeys()
-	j, _ := job.NewJob("func test(){return 1+1}", "test", false, hex.EncodeToString(priv))
-	node1 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node2 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node3 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node4 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node5 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node6 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node7 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node8 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node9 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node10 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node11 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node12 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node13 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node14 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node15 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-	node16 := merkletree.NewNode(*j, &merkletree.MerkleNode{}, &merkletree.MerkleNode{})
-
-	tree := merkletree.NewMerkleTree([]*merkletree.MerkleNode{node9, node10, node11, node12, node13, node14, node15, node16, node1, node2, node3, node4, node5, node6, node7, node8})
-	return core.NewBlock(*tree, []byte("TestingPreviousHash"), uint64(rand.Int()), difficulty, "benchmark-engine")
+	j, _ := job.NewJob("func test(){return 1+1}", "test", false, priv)
+	nodes := []*merkletree.MerkleNode{}
+	for i := 0; i < 16; i++ {
+		node, err := merkletree.NewNode(*j, nil, nil)
+		if err != nil {
+			b.logger.Fatal(err)
+		}
+		nodes = append(nodes, node)
+	}
+	tree, err := merkletree.NewMerkleTree(nodes)
+	if err != nil {
+		b.logger.Fatal(err)
+	}
+	block, err := core.NewBlock(*tree, "47656e65736973", uint64(rand.Int()), difficulty, "62656e63686d61726b2d656e67696e65")
+	if err != nil {
+		b.logger.Fatal(err)
+	}
+	return block
 }
 
-// Run spins up the benchmark engine
+// Run executes the benchmark engine
 func (b *Engine) run() {
-	glg.Warn("Benchmarking node")
+	// mines blocks from difficulty to when it takes longer than 60 seconds to mine block
+	b.logger.Log("Benchmark: starting benchmark")
 	done := false
 	close := make(chan struct{})
 	difficulty := 10 //! difficulty starts at 10
 	go func() {
 		var wg sync.WaitGroup
 		for done == false {
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 3; i++ { //? runs 3 difficulties in parralel to increase benchmark speed
 				wg.Add(1)
-				go func(myDifficulty int) {
+				go func(myDifficulty int) { //? mines block of myDifficulty 5 times and adds average time and difficulty
 					var avg []float64
 					var mu sync.Mutex
 					var mineWG sync.WaitGroup
-					glg.Warn("Benchmark: starting difficulty " + strconv.Itoa(myDifficulty))
 					for j := 0; j < 5; j++ {
 						mineWG.Add(1)
 						go func() {
@@ -128,10 +110,9 @@ func (b *Engine) run() {
 							wg.Done()
 							return
 						}
-						benchmark := NewBenchmark(average, uint8(myDifficulty))
-						b.addBenchmark(benchmark)
+						b.addBenchmark(NewBenchmark(average, uint8(myDifficulty)))
 					}
-					glg.Warn("Benchmark: finshed difficulty " + strconv.Itoa(myDifficulty))
+					b.logger.Log("Bechmark: completed benchmark for difficulty " + strconv.FormatInt(int64(myDifficulty), 10))
 					wg.Done()
 				}(difficulty)
 				difficulty++
@@ -145,12 +126,12 @@ func (b *Engine) run() {
 	score := float64(b.GetData()[len(b.GetData())-1].GetDifficulty()) - 10 //! 10 is subtracted to allow the score start from 1 since difficulty starts at 10
 	scoreDecimal := 1 - b.GetData()[len(b.GetData())-1].GetAvgTime()/100   // determine decimal part of score
 	b.setScore(score + scoreDecimal)
-	glg.Warn("Benchmark: Benchmark done")
+	b.logger.Info("Benchmark: benchmark done")
 }
 
 //NewEngine returns a Engine with benchmarks run
 func NewEngine() Engine {
-	b := Engine{}
+	b := Engine{logger: helpers.Logger()}
 	b.run()
 	return b
 }

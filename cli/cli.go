@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/kpango/glg"
+	"github.com/gizo-network/gizo/helpers"
 	"github.com/spf13/cobra"
 )
 
@@ -13,9 +13,14 @@ var gizoCmd = &cobra.Command{
 	Version: "1.0.0",
 }
 
+func init() {
+	gizoCmd.PersistentFlags().BoolVarP(&interactive, "interactive", "i", false, "spins up interactive shell")
+}
+
+//Execute boostraps all commands
 func Execute() {
 	gizoCmd.AddCommand(workerCmd, dispatcherCmd, cleardbCmd)
 	if err := gizoCmd.Execute(); err != nil {
-		glg.Fatal(err)
+		helpers.Logger().Fatal(err)
 	}
 }
