@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -99,7 +100,7 @@ func (b Block) Export() error {
 	if b.IsEmpty() {
 		return ErrUnableToExport
 	}
-	bBytes, err := helpers.Serialize(b)
+	bBytes, err := json.Marshal(b)
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,7 @@ func (b *Block) Import(hash string) error {
 		return err
 	}
 	temp := &Block{}
-	err = helpers.Deserialize(bBytes, &temp)
+	err = json.Unmarshal(bBytes, &temp)
 	if err != nil {
 		return err
 	}

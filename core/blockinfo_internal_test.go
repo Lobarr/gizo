@@ -32,9 +32,9 @@ func TestGetBlock(t *testing.T) {
 		FileName:  block.fileStats().Name(),
 		FileSize:  block.fileStats().Size(),
 	}
-	bBytes, err := helpers.Serialize(block)
+	bBytes, err := json.Marshal(block)
 	assert.NoError(t, err)
-	biBytes, err := helpers.Serialize(blockinfo.GetBlock())
+	biBytes, err := json.Marshal(blockinfo.GetBlock())
 	assert.Equal(t, bBytes, biBytes)
 	block.DeleteFile()
 }

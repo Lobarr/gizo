@@ -67,7 +67,7 @@ type Dispatcher struct {
 	wamp      nx_router.Router
 	rpc       *rpc.HTTPService // rpc servce
 	router    *mux.Router
-	jc        *cache.JobCache  //job cache
+	jc        cache.IJobCache  //job cache
 	bc        *core.BlockChain //blockchain
 	db        *bolt.DB         //holds topology table
 	mu        *sync.Mutex
@@ -137,7 +137,7 @@ func (d Dispatcher) WriteJobsAndPublish(jobs map[string]job.Job) {
 	if err != nil {
 		glg.Fatal(err)
 	}
-	bBytes, _ := helpers.Serialize(block)
+	bBytes, _ := json.Marshal(block)
 	err = d.dClient.Publish(BLOCK, nil, wamp.List{string(bBytes)}, nil)
 	if err != nil {
 		glg.Fatal(err)
@@ -158,7 +158,7 @@ func (d *Dispatcher) deployJobs() {
 						d.GetWorker(w).Assign(&j)
 						glg.Info("P2P: dispatched job")
 						worker := d.GetWorker(w)
-						jBytes, _ := helpers.Serialize(j)
+						jBytes, _ := json.Marshal(j)
 						err := d.wClient.Publish(worker.JobTopic(), nil, wamp.List{string(jBytes)}, nil)
 						if err != nil {
 							glg.Fatal(err)
@@ -180,7 +180,7 @@ func (d *Dispatcher) BlockSubscribe(peer *client.Client) {
 	handler := func(args wamp.List, kwargs wamp.Dict, details wamp.Dict) {
 		var block *core.Block
 		blk, _ := wamp.AsString(args[0])
-		err := helpers.Deserialize([]byte(blk), &block)
+		err := json.Unmarshal([]byte(blk), &block)
 		if err != nil {
 			return //TODO: handle error
 		}
@@ -216,7 +216,7 @@ func (d Dispatcher) WorkerDisconnect() {
 func (d Dispatcher) BlockReq(ctx context.Context, args wamp.List, kwargs, details wamp.Dict) *client.InvokeResult {
 	blockinfo, _ := d.GetBC().GetBlockInfo(args[0].(string))
 	block := blockinfo.GetBlock()
-	bBytes, _ := helpers.Serialize(block)
+	bBytes, _ := json.Marshal(block)
 	return &client.InvokeResult{Args: wamp.List{string(bBytes)}}
 }
 
@@ -232,7 +232,7 @@ func (d *Dispatcher) WorkerConnect(ctx context.Context, args wamp.List, kwargs, 
 			d.mu.Lock()
 			var exec *job.Exec
 			execStr, _ := wamp.AsString(args[0])
-			err := helpers.Deserialize([]byte(execStr), &exec)
+			err := json.Unmarshal([]byte(execStr), &exec)
 			if err != nil {
 				return //TODO: handle error's better
 			}
@@ -459,7 +459,7 @@ func (d Dispatcher) Start() {
 		if err != nil {
 			glg.Fatal(err)
 		}
-		versionBytes, err := helpers.Serialize(NewVersion(GizoVersion, height, hashes))
+		versionBytes, err := json.Marshal(NewVersion(GizoVersion, height, hashes))
 		if err != nil {
 			glg.Fatal(err)
 		}
@@ -563,7 +563,7 @@ func (d *Dispatcher) GetDispatchersAndSync() {
 				}
 				blk, _ := wamp.AsString(result.Arguments[0])
 				var block *core.Block
-				err = helpers.Deserialize([]byte(blk), &block)
+				err = json.Unmarshal([]byte(blk), &block)
 				if err != nil {
 					glg.Fatal("P2P: unable to sync blockchain", err)
 				}
@@ -650,7 +650,7 @@ func NewDispatcher(port int) *Dispatcher {
 			priv = b.Get([]byte("priv"))
 			pub = b.Get([]byte("pub"))
 			var bench *benchmark.Engine
-			err := helpers.Deserialize(b.Get([]byte("benchmark")), &bench)
+			err := json.Unmarshal(b.Get([]byte("benchmark")), &bench)
 			if err != nil {
 				glg.Fatal(err)
 			}
@@ -705,7 +705,7 @@ func NewDispatcher(port int) *Dispatcher {
 			glg.Fatal(err)
 		}
 
-		benchBytes, err := helpers.Serialize(bench)
+		benchBytes, err := json.Marshal(bench)
 		if err != nil {
 			glg.Log("here")
 			glg.Fatal(err)

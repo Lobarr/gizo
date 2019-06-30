@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/gizo-network/gizo/helpers"
 
@@ -36,7 +36,7 @@ var (
 type Job struct {
 	ID             string
 	Hash           string
-	Execs          []Exec
+	Execs          []IExec
 	Name           string
 	Task           string
 	Signature      string // signature of owner
@@ -46,16 +46,16 @@ type Job struct {
 
 //UniqJob returns unique values of parameter
 func UniqJob(jobs []Job) []Job {
-	temp := []Job{}
+	tempJob := []Job{}
 	seen := make(map[string]bool)
 	for _, job := range jobs {
 		if _, ok := seen[job.GetID()]; ok {
 			continue
 		}
 		seen[job.GetID()] = true
-		temp = append(temp, job)
+		tempJob = append(tempJob, job)
 	}
-	return temp
+	return tempJob
 }
 
 //Sign signature of owner of job
@@ -135,7 +135,7 @@ func NewJob(task string, name string, priv bool, privKey string) (*Job, error) {
 	j := &Job{
 		SubmissionTime: time.Now().Unix(),
 		ID:             uuid.NewV4().String(),
-		Execs:          []Exec{},
+		Execs:          []IExec{},
 		Name:           name,
 		Task:           helpers.Encode64([]byte(task)),
 		Private:        priv,
@@ -246,22 +246,22 @@ func (j Job) serializeExecs() []byte {
 }
 
 //GetExec return exec of specified hash
-func (j Job) GetExec(hash string) (*Exec, error) {
+func (j Job) GetExec(hash string) (IExec, error) {
 	for _, exec := range j.GetExecs() {
 		if exec.GetHash() == hash {
-			return &exec, nil
+			return exec, nil
 		}
 	}
 	return nil, ErrExecNotFound
 }
 
 //GetLatestExec return latest exec of job
-func (j Job) GetLatestExec() Exec {
+func (j Job) GetLatestExec() IExec {
 	return j.Execs[len(j.GetExecs())-1]
 }
 
 //GetExecs returns exec of job
-func (j Job) GetExecs() []Exec {
+func (j Job) GetExecs() []IExec {
 	return j.Execs
 }
 
@@ -275,8 +275,8 @@ func (j *Job) setSignature(sign string) {
 }
 
 //AddExec add exec to job
-func (j *Job) AddExec(je Exec) {
-	j.Execs = append(j.Execs, je)
+func (j *Job) AddExec(jobExec IExec) {
+	j.Execs = append(j.Execs, jobExec)
 }
 
 //GetTask returns task
@@ -330,10 +330,10 @@ func argsStringified(args []interface{}) (string, error) {
 }
 
 //Execute runs the exec
-func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
+func (j *Job) Execute(exec IExec, passphrase string) IExec {
 	//TODO: kill goroutines running within this function when it exits
 	if j.GetPrivate() == true {
-		verify, err := j.VerifySignature(exec.getPub())
+		verify, err := j.VerifySignature(exec.GetPub())
 		if err != nil {
 			exec.SetErr(err)
 		}
@@ -419,7 +419,7 @@ func (j *Job) Execute(exec *Exec, passphrase string) *Exec {
 			exec.SetDuration(time.Duration(time.Now().Sub(start).Nanoseconds()))
 			exec.SetErr(err)
 			exec.SetResult(result.Interface())
-			exec.setHash()
+			exec.SetHash()
 			exec.SetStatus(FINISHED)
 			done <- "exec"
 		}

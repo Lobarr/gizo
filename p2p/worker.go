@@ -11,14 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/gammazero/nexus/client"
 	"github.com/gammazero/nexus/wamp"
-
-	"github.com/boltdb/bolt"
-	"github.com/gizo-network/gizo/helpers"
-
 	"github.com/gizo-network/gizo/core"
 	"github.com/gizo-network/gizo/crypt"
+	"github.com/gizo-network/gizo/helpers"
 	"github.com/gizo-network/gizo/job/queue/qItem"
 	"github.com/kpango/glg"
 )
@@ -164,17 +162,18 @@ func (w Worker) JobSubscription() {
 		}
 		w.SetBusy(true)
 		itemStr, _ := wamp.AsString(args[0])
+		fmt.Println(itemStr) //TODO: remove logging
 		var item *qItem.Item
-		err := helpers.Deserialize([]byte(itemStr), &item)
+		err := json.Unmarshal([]byte(itemStr), &item)
 		if err != nil {
 			return
-		} else {
-			w.SetItem(*item)
-			exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
-			w.item.SetExec(exec)
-			execBytes, _ := helpers.Serialize(w.item.GetExec())
-			w.conn.Publish(w.ResultTopic(), nil, wamp.List{string(execBytes)}, nil)
 		}
+		w.SetItem(*item)
+		exec := w.item.Job.Execute(w.item.GetExec(), w.GetDispatcher())
+		w.item.SetExec(exec)
+		execBytes, _ := json.Marshal(w.item.GetExec())
+		w.conn.Publish(w.ResultTopic(), nil, wamp.List{string(execBytes)}, nil)
+
 	}
 	w.conn.Subscribe(w.JobTopic(), handler, nil)
 }

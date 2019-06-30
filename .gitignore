@@ -8,3 +8,5 @@
 *.blk
 .gizo
 debug
+**/mocks
+**/*.coverprofile

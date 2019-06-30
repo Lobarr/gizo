@@ -25,3 +25,6 @@ const BlockBucket = "blocks"
 
 //IndexDB is the database file for the node
 const IndexDB = "bc_%s.db" // node id
+
+//Blockrate blocks per minute
+const Blockrate = 15

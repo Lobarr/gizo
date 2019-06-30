@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -43,7 +44,7 @@ func NewExec(args []interface{}, retries, priority int, backoff time.Duration, e
 		return nil, ErrBackoffOutsideLimit
 	}
 
-	envsBytes, err := helpers.Serialize(envs)
+	envsBytes, err := json.Marshal(envs)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (e Exec) GetEnvs(passphrase string) (EnvironmentVariables, error) {
 		return EnvironmentVariables{}, errors.New("Unable to decrypt environment variables")
 	}
 	var envs EnvironmentVariables
-	err = helpers.Deserialize(d, &envs)
+	err = json.Unmarshal(d, &envs)
 	if err != nil {
 		return EnvironmentVariables{}, err
 	}
@@ -220,12 +221,12 @@ func (e Exec) GetHash() string {
 	return e.Hash
 }
 
-func (e *Exec) setHash() error {
-	stringified, err := helpers.Serialize(e.GetErr())
+func (e *Exec) SetHash() error {
+	stringified, err := json.Marshal(e.GetErr())
 	if err != nil {
 		return err
 	}
-	result, err := helpers.Serialize(e.GetResult())
+	result, err := json.Marshal(e.GetResult())
 	if err != nil {
 		return err
 	}
@@ -309,7 +310,7 @@ func (e *Exec) SetBy(by string) {
 	e.By = by
 }
 
-func (e Exec) getPub() string {
+func (e Exec) GetPub() string {
 	return e.Pub
 }
 

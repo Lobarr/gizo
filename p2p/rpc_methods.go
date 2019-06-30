@@ -31,7 +31,7 @@ func (d Dispatcher) Version() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	versionBytes, err := helpers.Serialize(NewVersion(GizoVersion, height, hashes))
+	versionBytes, err := json.Marshal(NewVersion(GizoVersion, height, hashes))
 	return string(versionBytes), nil
 }
 
@@ -46,7 +46,7 @@ func (d Dispatcher) BlockByHash(hash string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	blockBytes, err := helpers.Serialize(b.GetBlock())
+	blockBytes, err := json.Marshal(b.GetBlock())
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +59,7 @@ func (d Dispatcher) BlockByHeight(height int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	blockBytes, err := helpers.Serialize(b)
+	blockBytes, err := json.Marshal(b)
 	if err != nil {
 		return "", err
 	}
@@ -72,7 +72,7 @@ func (d Dispatcher) Latest15Blocks() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	blocksBytes, err := helpers.Serialize(blocks)
+	blocksBytes, err := json.Marshal(blocks)
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +85,7 @@ func (d Dispatcher) LatestBlock() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	blockBytes, err := helpers.Serialize(block)
+	blockBytes, err := json.Marshal(block)
 	if err != nil {
 		return "", err
 	}
@@ -123,7 +123,7 @@ func (d Dispatcher) NewJob(task string, name string, priv bool, privKey string) 
 //NewExec returns exec with specified config
 func (d Dispatcher) NewExec(args []interface{}, retries, priority int, backoff int64, execTime int64, interval int, ttl int64, pub string, envs string) (string, error) {
 	var e job.EnvironmentVariables
-	err := helpers.Deserialize([]byte(envs), &e)
+	err := json.Unmarshal([]byte(envs), &e)
 	if err != nil {
 		return "", err
 	}
@@ -134,7 +134,7 @@ func (d Dispatcher) NewExec(args []interface{}, retries, priority int, backoff i
 	if err != nil {
 		return "", err
 	}
-	execBytes, err := helpers.Serialize(exec)
+	execBytes, err := json.Marshal(exec)
 	if err != nil {
 		return "", err
 	}
@@ -404,7 +404,7 @@ func (d Dispatcher) Job(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jBytes, err := helpers.Serialize(j)
+	jBytes, err := json.Marshal(j)
 	if err != nil {
 		return "", err
 	}
@@ -453,7 +453,7 @@ func (d Dispatcher) JobLatestExec(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	jBytes, err := helpers.Serialize(j)
+	jBytes, err := json.Marshal(j)
 	if err != nil {
 		return "", err
 	}
@@ -466,7 +466,7 @@ func (d Dispatcher) JobExecs(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	execsBytes, err := helpers.Serialize(execs)
+	execsBytes, err := json.Marshal(execs)
 	if err != nil {
 		return "", err
 	}
@@ -488,7 +488,7 @@ func (d Dispatcher) KeyPair() (string, error) {
 	temp := make(map[string]string)
 	temp["priv"] = priv
 	temp["pub"] = pub
-	keysBytes, err := helpers.Serialize(temp)
+	keysBytes, err := json.Marshal(temp)
 	if err != nil {
 		return "", err
 	}
@@ -499,14 +499,14 @@ func (d Dispatcher) KeyPair() (string, error) {
 func (d Dispatcher) Solo(jr string) (string, error) {
 	//TODO: send result to message broker
 	var request job.Request
-	err := helpers.Deserialize([]byte(jr), &request)
+	err := json.Unmarshal([]byte(jr), &request)
 	if err != nil {
 		fmt.Println("broke while deserializing")
 		return "", err
 	}
 	solo := solo.NewSolo(request, d.GetBC(), d.GetJobPQ(), d.GetJC())
 	solo.Dispatch()
-	rBytes, err := helpers.Serialize(solo.Result())
+	rBytes, err := json.Marshal(solo.Result())
 	if err != nil {
 		fmt.Println("broke while serializing result")
 		return "", err
@@ -520,14 +520,14 @@ func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 	var requests []job.Request
 	for _, jr := range jrs {
 		var request job.Request
-		err := helpers.Deserialize([]byte(jr), &request)
+		err := json.Unmarshal([]byte(jr), &request)
 		if err != nil {
 			return "", err
 		}
 		requests = append(requests, request)
 	}
 	var callbackRequest job.Request
-	err := helpers.Deserialize([]byte(callbackJr), &callbackRequest)
+	err := json.Unmarshal([]byte(callbackJr), &callbackRequest)
 	if err != nil {
 		return "", err
 	}
@@ -536,7 +536,7 @@ func (d Dispatcher) Chord(jrs []string, callbackJr string) (string, error) {
 		return "", err
 	}
 	c.Dispatch()
-	result, err := helpers.Serialize(c.Result())
+	result, err := json.Marshal(c.Result())
 	if err != nil {
 		return "", err
 	}
@@ -549,7 +549,7 @@ func (d Dispatcher) Chain(jrs []string) (string, error) {
 	var requests []job.Request
 	for _, jr := range jrs {
 		var request job.Request
-		err := helpers.Deserialize([]byte(jr), &request)
+		err := json.Unmarshal([]byte(jr), &request)
 		if err != nil {
 			return "", err
 		}
@@ -574,7 +574,7 @@ func (d Dispatcher) Batch(jrs []string) (string, error) {
 	var requests []job.Request
 	for _, jr := range jrs {
 		var request job.Request
-		err := helpers.Deserialize([]byte(jr), &request)
+		err := json.Unmarshal([]byte(jr), &request)
 		if err != nil {
 			return "", err
 		}

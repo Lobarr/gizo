@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -69,6 +70,7 @@ func (bc *BlockChain) setDB(db *bolt.DB) {
 
 //GetBlockInfo returns the blockinfo of a particular block from the db
 func (bc *BlockChain) GetBlockInfo(hash string) (*BlockInfo, error) {
+	bc.logger.Debugf("Blockchain: getting block info of hash %s", hash)
 	var blockinfo *BlockInfo
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
@@ -78,7 +80,7 @@ func (bc *BlockChain) GetBlockInfo(hash string) (*BlockInfo, error) {
 		}
 		blockinfoBytes := b.Get(hashBytes)
 		if blockinfoBytes != nil {
-			err = helpers.Deserialize(blockinfoBytes, &blockinfo)
+			err = json.Unmarshal(blockinfoBytes, &blockinfo)
 			if err != nil {
 				return err
 			}
@@ -158,12 +160,10 @@ func (bc *BlockChain) GetLatest15() ([]Block, error) {
 			if block.GetHeight() == 0 {
 				blocks = append(blocks, *block)
 				break
-			} else {
-				blocks = append(blocks, *block)
 			}
-		} else {
-			break
+			blocks = append(blocks, *block)
 		}
+		break
 	}
 	return blocks, nil
 }
@@ -174,7 +174,7 @@ func (bc *BlockChain) GetLatestHeight() (int, error) {
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		lastBlockBytes := b.Get(bc.getTip())
-		err := helpers.Deserialize(lastBlockBytes, &lastBlock)
+		err := json.Unmarshal(lastBlockBytes, &lastBlock)
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ func (bc *BlockChain) GetLatestBlock() (*Block, error) {
 	err := bc.getDB().View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
 		lastBlockBytes := b.Get(bc.getTip())
-		err := helpers.Deserialize(lastBlockBytes, &lastBlock)
+		err := json.Unmarshal(lastBlockBytes, &lastBlock)
 		if err != nil {
 			return err
 		}
@@ -241,7 +241,7 @@ func (bc *BlockChain) AddBlock(block *Block) error {
 			FileName:  block.fileStats().Name(),
 			FileSize:  block.fileStats().Size(),
 		}
-		biBytes, err := helpers.Serialize(blockinfo)
+		biBytes, err := json.Marshal(blockinfo)
 		if err != nil {
 			return err
 		}
@@ -433,8 +433,8 @@ func (bc *BlockChain) GetBlockHashesHex() ([]string, error) {
 }
 
 //InitGenesisBlock creates genesis block
-func (bc *BlockChain) InitGenesisBlock(nodeID string) {
-	bc.AddBlock(GenesisBlock(nodeID))
+func (bc *BlockChain) InitGenesisBlock(nodeID string) error {
+	return bc.AddBlock(GenesisBlock(nodeID))
 }
 
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"math"
 	"math/big"
 	"strconv"
@@ -53,10 +54,10 @@ func (p *POW) setDifficulty(d uint8) {
 	p.difficulty = d
 }
 
-//mergea info and returns it as byttes
+//merges info and returns it as byttes
 func (p POW) prepareData(nonce int) ([]byte, error) {
 	tree := merkletree.MerkleTree{Root: p.GetBlock().GetHeader().GetMerkleRoot(), LeafNodes: p.GetBlock().GetNodes()}
-	mBytes, err := helpers.Serialize(tree)
+	mBytes, err := json.Marshal(tree)
 	if err != nil {
 		p.logger.Fatal(err)
 	}

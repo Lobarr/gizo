@@ -12,7 +12,9 @@ func TestEncode64(t *testing.T) {
 }
 
 func TestDecode64(t *testing.T) {
-	b := []byte("testing")
-	enc := helpers.Encode64(b)
-	assert.Equal(t, b, helpers.Decode64(enc))
+	expectedDecoded := []byte("testing")
+	encoded := helpers.Encode64(expectedDecoded)
+	decoded, err := helpers.Decode64(encoded)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedDecoded, decoded)
 }

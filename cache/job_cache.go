@@ -1,10 +1,9 @@
 package cache
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
-
-	"github.com/kpango/glg"
 
 	"github.com/gizo-network/gizo/helpers"
 
@@ -13,128 +12,158 @@ import (
 	"github.com/gizo-network/gizo/job"
 )
 
-const (
-	//MaxCacheLen number of jobs held in cache
-	MaxCacheLen = 128
-)
+//MaxCacheLen number of jobs held in cache
+const MaxCacheLen = 128
 
-var (
-	//ErrCacheFull occurs when cache is filled up
-	ErrCacheFull = errors.New("Cache: Cache filled up")
-)
+//ErrCacheFull occurs when cache is filled up
+var ErrCacheFull = errors.New("Cache: cache filled up")
 
 //JobCache holds most likely to be executed jobs
 type JobCache struct {
-	cache  *bigcache.BigCache
-	bc     *core.BlockChain
-	logger *glg.Glg
+	cache       IBigCache
+	blockchain  core.IBlockChain
+	logger      helpers.ILogger
+	watchMode   bool
+	quitChannel chan (struct{})
 }
 
-func (c JobCache) getCache() *bigcache.BigCache {
-	return c.cache
+func (jobCache JobCache) getCache() IBigCache {
+	return jobCache.cache
 }
 
-func (c JobCache) getBC() *core.BlockChain {
-	return c.bc
+func (jobCache JobCache) getBC() core.IBlockChain {
+	return jobCache.blockchain
+}
+
+func (jobCache JobCache) getLogger() helpers.ILogger {
+	return jobCache.logger
+}
+
+func (jobCache JobCache) getQuitChnnel() chan (struct{}) {
+	return jobCache.quitChannel
+}
+
+//StopWatchMode exits watch mode
+func (jobCache JobCache) StopWatchMode() {
+	jobCache.getQuitChnnel() <- struct{}{}
 }
 
 //IsFull returns true if cache is full
-func (c JobCache) IsFull() bool {
-	if c.getCache().Len() >= MaxCacheLen {
+func (jobCache JobCache) IsFull() bool {
+	if jobCache.getCache().Len() >= MaxCacheLen {
 		return true
 	}
 	return false
 }
 
 //updates cache every minute
-func (c JobCache) watch() {
+func (jobCache JobCache) watch() error {
 	ticker := time.NewTicker(time.Minute)
-	quit := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				c.fill()
-			case <-quit:
-				ticker.Stop()
-				return
+	quitChannel := jobCache.getQuitChnnel()
+	for {
+		select {
+		case <-ticker.C:
+			if err := jobCache.fill(); err != nil {
+				return err
 			}
+		case <-quitChannel:
+			ticker.Stop()
+			return nil
 		}
-	}()
+	}
 }
 
 //Set adds key and value to cache
-func (c JobCache) Set(key string, val []byte) error {
-	if c.getCache().Len() >= MaxCacheLen {
+func (jobCache JobCache) Set(key string, val []byte) error {
+	jobCache.getLogger().Debugf("Cache: setting job %s", key)
+	if jobCache.IsFull() {
 		return ErrCacheFull
 	}
-	c.getCache().Set(key, val)
+	if err := jobCache.getCache().Set(key, val); err != nil {
+		return err
+	}
 	return nil
 }
 
 //Get returns job from cache
-func (c JobCache) Get(key string) (*job.Job, error) {
-	jBytes, err := c.getCache().Get(key)
+func (jobCache JobCache) Get(key string) (*job.Job, error) {
+	jobCache.getLogger().Debugf("Cache: getting job %s", key)
+	jobBytes, err := jobCache.getCache().Get(key)
 	if err != nil {
 		return nil, err
 	}
-	var j *job.Job
-	err = helpers.Deserialize(jBytes, &j)
-	if err != nil {
+	var job *job.Job
+	if err = json.Unmarshal(jobBytes, &job); err != nil {
 		return nil, err
 	}
-	return j, nil
+	return job, nil
 }
 
 //fills up the cache with jobs with most execs in the last 15 blocks
-func (c JobCache) fill() {
+func (jobCache JobCache) fill() error {
+	jobCache.getLogger().Debug("Cache: filling up cache")
 	var jobs []job.Job
-	blks, err := c.getBC().GetLatest15()
+	blocks, err := jobCache.getBC().GetLatest15()
 	if err != nil {
-		c.logger.Fatal(err)
+		return err
 	}
-	if len(blks) != 0 {
-		for _, blk := range blks {
-			for _, job := range blk.GetNodes() {
+	if len(blocks) != 0 {
+		for _, block := range blocks {
+			var nodes = block.GetNodes()
+			for _, job := range nodes {
 				jobs = append(jobs, job.GetJob())
 			}
 		}
+		var endIndex int
 		sorted := job.UniqJob(mergeSort(jobs))
 		if len(sorted) > MaxCacheLen {
-			for i := 0; i <= MaxCacheLen; i++ {
-				jobBytes, err := helpers.Serialize(sorted[i])
-				if err != nil {
-					c.logger.Fatal(err)
-				}
-				c.Set(sorted[i].GetID(), jobBytes)
-			}
+			endIndex = MaxCacheLen + 1
 		} else {
-			for _, job := range sorted {
-				jobBytes, err := helpers.Serialize(job)
-				if err != nil {
-					c.logger.Fatal(err)
-				}
-				c.Set(job.GetID(), jobBytes)
+			endIndex = len(sorted)
+		}
+		for i := 0; i < endIndex; i++ {
+			jobBytes, err := json.Marshal(sorted[i])
+			if err != nil {
+				return err
 			}
+			jobCache.Set(sorted[i].GetID(), jobBytes)
 		}
 	}
+	return nil
 }
 
 //NewJobCache return s initialized job cache
-func NewJobCache(bc *core.BlockChain) *JobCache {
-	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
-	jc := JobCache{c, bc, helpers.Logger()}
-	jc.fill()
-	go jc.watch()
-	return &jc
-}
+func NewJobCache(blockchain core.IBlockChain, cacheArg IBigCache, loggerArg helpers.ILogger, watch bool) (IJobCache, error) {
+	var cache IBigCache
+	var logger helpers.ILogger
+	quitChannel := make(chan (struct{}))
 
-//NewJobCacheNoWatch creates a new jobcache without updating every minute
-func NewJobCacheNoWatch(bc *core.BlockChain) *JobCache {
-	c, _ := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
-	jc := JobCache{c, bc, helpers.Logger()}
-	jc.fill()
-	return &jc
+	if cacheArg == nil {
+		bigCache, err := bigcache.NewBigCache(bigcache.DefaultConfig(time.Minute))
+		if err != nil {
+			return nil, err
+		}
+		cache = bigCache
+	} else {
+		cache = cacheArg
+	}
+
+	if loggerArg == nil {
+		logger = helpers.Logger()
+	} else {
+		logger = loggerArg
+	}
+
+	jobCache := JobCache{cache, blockchain, logger, watch, quitChannel}
+	if err := jobCache.fill(); err != nil {
+		return nil, err
+	}
+
+	if watch {
+		go jobCache.watch()
+	}
+
+	return &jobCache, nil
 }
 
 // merge returns an array of job in order of number of execs in the job from max to min

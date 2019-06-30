@@ -125,9 +125,9 @@ func TestImport(t *testing.T) {
 
 	empty := Block{}
 	empty.Import(testBlock.Header.GetHash())
-	testBlockBytes, err := helpers.Serialize(testBlock)
+	testBlockBytes, err := json.Marshal(testBlock)
 	assert.NoError(t, err)
-	emptyBytes, err := helpers.Serialize(empty)
+	emptyBytes, err := json.Marshal(empty)
 	assert.NoError(t, err)
 	assert.JSONEq(t, string(testBlockBytes), string(emptyBytes))
 	testBlock.DeleteFile()

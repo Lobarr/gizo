@@ -2,8 +2,7 @@ package core
 
 import (
 	"encoding/hex"
-
-	"github.com/gizo-network/gizo/helpers"
+	"encoding/json"
 
 	"github.com/boltdb/bolt"
 )
@@ -31,7 +30,7 @@ func (i *BlockChainIterator) Next() (*Block, error) {
 		b := tx.Bucket([]byte(BlockBucket))
 		blockinfoBytes := b.Get(i.GetCurrent())
 		var blockinfo *BlockInfo
-		err := helpers.Deserialize(blockinfoBytes, &blockinfo)
+		err := json.Unmarshal(blockinfoBytes, &blockinfo)
 		if err != nil {
 			return err
 		}
@@ -53,7 +52,7 @@ func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
 		b := tx.Bucket([]byte(BlockBucket))
 		blockinfoBytes := b.Get(i.GetCurrent())
 		var blockinfo *BlockInfo
-		err := helpers.Deserialize(blockinfoBytes, &blockinfo)
+		err := json.Unmarshal(blockinfoBytes, &blockinfo)
 		if err != nil {
 			return err
 		}
