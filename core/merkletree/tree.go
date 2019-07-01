@@ -24,112 +24,112 @@ var (
 // MerkleTree tree of jobs
 type MerkleTree struct {
 	Root      string // hash of built tree
-	LeafNodes []*MerkleNode
+	LeafNodes []IMerkleNode
 }
 
 // GetRoot returns root
-func (m MerkleTree) GetRoot() string {
-	return m.Root
+func (merkleTree MerkleTree) GetRoot() string {
+	return merkleTree.Root
 }
 
-func (m *MerkleTree) setRoot(r string) {
-	m.Root = r
+func (merkleTree *MerkleTree) setRoot(root string) {
+	merkleTree.Root = root
 }
 
 // GetLeafNodes return leafnodes
-func (m MerkleTree) GetLeafNodes() []*MerkleNode {
-	return m.LeafNodes
+func (merkleTree MerkleTree) GetLeafNodes() []IMerkleNode {
+	return merkleTree.LeafNodes
 }
 
 // SetLeafNodes return leafnodes
-func (m *MerkleTree) SetLeafNodes(l []*MerkleNode) {
-	m.LeafNodes = l
+func (merkleTree *MerkleTree) SetLeafNodes(leafNodes []IMerkleNode) {
+	merkleTree.LeafNodes = leafNodes
 }
 
 //Build builds merkle tree from leafs to root, hashed the root and sets it as the root of the merkletree
-func (m *MerkleTree) Build() error {
-	if m.GetRoot() != "" {
+func (merkleTree *MerkleTree) Build() error {
+	if merkleTree.GetRoot() != "" {
 		return ErrTreeRebuildAttempt
 	}
-	if len(m.GetLeafNodes()) > MaxTreeJobs {
+	if len(merkleTree.GetLeafNodes()) > MaxTreeJobs {
 		return ErrTooMuchLeafNodes
 	}
-	var shrink = m.GetLeafNodes()
-	for len(shrink) != 1 {
-		var levelUp []*MerkleNode
-		if len(shrink)%2 == 0 {
-			for i := 0; i < len(shrink); i += 2 {
-				parent, err := merge(*shrink[i], *shrink[i+1])
+	var leafNodes = merkleTree.GetLeafNodes()
+	for len(leafNodes) != 1 {
+		var levelUp []IMerkleNode
+		if len(leafNodes)%2 == 0 {
+			for i := 0; i < len(leafNodes); i += 2 {
+				parent, err := merge(leafNodes[i], leafNodes[i+1])
 				if err != nil {
 					return err
 				}
 				levelUp = append(levelUp, parent)
 			}
 		} else {
-			shrink = append(shrink, shrink[len(shrink)-1]) //duplicate last to balance tree
-			for i := 0; i < len(shrink); i += 2 {
-				parent, err := merge(*shrink[i], *shrink[i+1])
+			leafNodes = append(leafNodes, leafNodes[len(leafNodes)-1]) //duplicate last to balance tree
+			for i := 0; i < len(leafNodes); i += 2 {
+				parent, err := merge(leafNodes[i], leafNodes[i+1])
 				if err != nil {
 					return err
 				}
 				levelUp = append(levelUp, parent)
 			}
 		}
-		m.setRoot(shrink[0].GetHash())
-		shrink = levelUp
+		merkleTree.setRoot(leafNodes[0].GetHash())
+		leafNodes = levelUp
 	}
 	return nil
 }
 
 //VerifyTree returns true if tree is verified
-func (m MerkleTree) VerifyTree() bool {
-	t, _ := NewMerkleTree(m.GetLeafNodes())
-	return t.GetRoot() == m.GetRoot()
+func (merkleTree MerkleTree) VerifyTree() bool {
+	newTree, _ := NewMerkleTree(merkleTree.GetLeafNodes())
+	return newTree.GetRoot() == merkleTree.GetRoot()
 }
 
 //SearchNode returns true if node with hash exists
-func (m MerkleTree) SearchNode(hash string) (*MerkleNode, error) {
-	if len(m.GetLeafNodes()) == 0 {
+func (merkleTree MerkleTree) SearchNode(hash string) (IMerkleNode, error) {
+	if len(merkleTree.GetLeafNodes()) == 0 {
 		return nil, ErrLeafNodesEmpty
 	}
-	for _, n := range m.GetLeafNodes() {
-		if n.GetHash() == hash {
-			return n, nil
+	for _, leafNode := range merkleTree.GetLeafNodes() {
+		if leafNode.GetHash() == hash {
+			return leafNode, nil
 		}
 	}
 	return nil, ErrNodeDoesntExist
 }
 
 //SearchJob returns job from the tree
-func (m MerkleTree) SearchJob(ID string) (*job.Job, error) {
-	if len(m.GetLeafNodes()) == 0 {
+func (merkleTree MerkleTree) SearchJob(ID string) (job.IJob, error) {
+	if len(merkleTree.GetLeafNodes()) == 0 {
 		return nil, ErrLeafNodesEmpty
 	}
-	for _, n := range m.GetLeafNodes() {
-		if n.GetJob().GetID() == ID {
-			return &n.Job, nil
+	for _, leafNode := range merkleTree.GetLeafNodes() {
+		if leafNode.GetJob().GetID() == ID {
+			return leafNode.GetJob(), nil
 		}
 	}
 	return nil, ErrNodeDoesntExist
 }
 
 // NewMerkleTree returns empty merkletree
-func NewMerkleTree(nodes []*MerkleNode) (*MerkleTree, error) {
-	t := &MerkleTree{
+func NewMerkleTree(nodes []IMerkleNode) (IMerkleTree, error) {
+	merkleTree := &MerkleTree{
 		LeafNodes: nodes,
 	}
-	err := t.Build()
+	err := merkleTree.Build()
 	if err != nil {
 		return nil, err
 	}
-	return t, nil
+	return merkleTree, nil
 }
 
 //merges two nodes
-func merge(left, right MerkleNode) (*MerkleNode, error) {
-	job, err := MergeJobs(left, right)
+func merge(leftNode, rightNode IMerkleNode) (IMerkleNode, error) {
+	job, err := MergeJobs(leftNode, rightNode)
 	if err != nil {
 		return nil, err
 	}
-	return NewNode(job, &left, &right)
+	return NewNode(job, leftNode, rightNode)
 }

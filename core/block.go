@@ -23,62 +23,148 @@ var (
 
 //Block - the foundation of blockchain
 type Block struct {
-	Header     BlockHeader
-	Jobs       []*merkletree.MerkleNode
-	Height     uint64
-	ReceivedAt int64  //time it was received
-	By         string // id of node that generated block
+	Header     IBlockHeader
+	Jobs       []merkletree.IMerkleNode
+	Height     uint64 `storm:"id"`
+	ReceivedAt int64  `storm:"index"` //time it was received
+	By         string `storm:"index"` // id of node that generated block
 }
 
 //GetHeader returns the block header
-func (b Block) GetHeader() BlockHeader {
-	return b.Header
+func (block Block) GetHeader() IBlockHeader {
+	return block.Header
 }
 
 //sets the block header
-func (b *Block) setHeader(h BlockHeader) {
-	b.Header = h
+func (block *Block) setHeader(blockHeader IBlockHeader) {
+	block.Header = blockHeader
 }
 
 //GetNodes retuns the block's merklenodes
-func (b Block) GetNodes() []*merkletree.MerkleNode {
-	return b.Jobs
+func (block Block) GetNodes() []merkletree.IMerkleNode {
+	return block.Jobs
 }
 
 //sets merklenodes
-func (b *Block) setNodes(j []*merkletree.MerkleNode) {
-	b.Jobs = j
+func (block *Block) setNodes(merkleNodes []merkletree.IMerkleNode) {
+	block.Jobs = merkleNodes
 }
 
 //GetHeight returns the block height
-func (b Block) GetHeight() uint64 {
-	return b.Height
+func (block Block) GetHeight() uint64 {
+	return block.Height
 }
 
 //sets the block height
-func (b *Block) setHeight(h uint64) {
-	b.Height = h
+func (block *Block) setHeight(h uint64) {
+	block.Height = h
 }
 
 //GetBy returns id of node that mined block
-func (b Block) GetBy() string {
-	return b.By
+func (block Block) GetBy() string {
+	return block.By
 }
 
-func (b *Block) setBy(id string) {
-	b.By = id
+func (block *Block) setBy(id string) {
+	block.By = id
+}
+
+//Export writes block on disk
+func (block Block) Export() error {
+	InitializeDataPath()
+	if block.IsEmpty() {
+		return ErrUnableToExport
+	}
+	blockBytes, err := json.Marshal(block)
+	if err != nil {
+		return err
+	}
+	if os.Getenv("ENV") == "dev" {
+		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, block.Header.GetHash())), []byte(helpers.Encode64(blockBytes)), os.FileMode(0755))
+	} else {
+		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, block.Header.GetHash())), []byte(helpers.Encode64(blockBytes)), os.FileMode(0755))
+	}
+	return err
+}
+
+//Import reads block file into memory
+func (block *Block) Import(hash string) error {
+	var readBlock []byte
+	var err error
+	if os.Getenv("ENV") == "dev" {
+		readBlock, err = ioutil.ReadFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, hash)))
+	} else {
+		readBlock, err = ioutil.ReadFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, hash)))
+	}
+	if err != nil {
+		return err //TODO: handle block doesn't exist by asking peer
+	}
+	blockBytes, err := helpers.Decode64(string(readBlock))
+	if err != nil {
+		return err
+	}
+	temp := &Block{}
+	err = json.Unmarshal(blockBytes, &temp)
+	if err != nil {
+		return err
+	}
+	block.setHeader(temp.GetHeader())
+	block.setHeight(temp.GetHeight())
+	block.setNodes(temp.GetNodes())
+	block.setBy(temp.GetBy())
+	return nil
+}
+
+//returns the file stats of a blockfile
+func (block Block) fileStats() os.FileInfo {
+	var info os.FileInfo
+	var err error
+	if os.Getenv("ENV") == "dev" {
+		info, err = os.Stat(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, block.Header.GetHash())))
+	} else {
+		info, err = os.Stat(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, block.Header.GetHash())))
+	}
+	if os.IsNotExist(err) {
+		helpers.Logger().Fatal("Core: block file doesn't exist, blocks folder corrupted")
+	}
+	return info
+}
+
+//IsEmpty returns true is block is empty
+func (block *Block) IsEmpty() bool {
+	return block.Header.GetHash() == ""
+}
+
+//VerifyBlock verifies a block
+func (block *Block) VerifyBlock() (bool, error) {
+	pow := NewPOW(block)
+	return pow.Validate()
+}
+
+//DeleteFile deletes block file on disk
+func (block Block) DeleteFile() error {
+	var err error
+	if os.Getenv("ENV") == "dev" {
+		err = os.Remove(path.Join(BlockPathDev, block.fileStats().Name()))
+	} else {
+		err = os.Remove(path.Join(BlockPathProd, block.fileStats().Name()))
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 //NewBlock returns a new block
-func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficulty uint8, by string) (*Block, error) {
+func NewBlock(merkleTree merkletree.IMerkleTree, prevBlockHash string, height uint64, difficulty uint8, by string) (IBlock, error) {
 	block := &Block{
 		Header: BlockHeader{
 			Timestamp:     time.Now().Unix(),
-			PrevBlockHash: pHash,
-			MerkleRoot:    tree.GetRoot(),
+			PrevBlockHash: prevBlockHash,
+			MerkleRoot:    merkleTree.GetRoot(),
 			Difficulty:    big.NewInt(int64(difficulty)),
 		},
-		Jobs:   tree.GetLeafNodes(),
+		Jobs:   merkleTree.GetLeafNodes(),
 		Height: height,
 		By:     by,
 	}
@@ -92,90 +178,4 @@ func NewBlock(tree merkletree.MerkleTree, pHash string, height uint64, difficult
 		return nil, err
 	}
 	return block, nil
-}
-
-//Export writes block on disk
-func (b Block) Export() error {
-	InitializeDataPath()
-	if b.IsEmpty() {
-		return ErrUnableToExport
-	}
-	bBytes, err := json.Marshal(b)
-	if err != nil {
-		return err
-	}
-	if os.Getenv("ENV") == "dev" {
-		err = ioutil.WriteFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0755))
-	} else {
-		err = ioutil.WriteFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())), []byte(helpers.Encode64(bBytes)), os.FileMode(0755))
-	}
-	return err
-}
-
-//Import reads block file into memory
-func (b *Block) Import(hash string) error {
-	var read []byte
-	var err error
-	if os.Getenv("ENV") == "dev" {
-		read, err = ioutil.ReadFile(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, hash)))
-	} else {
-		read, err = ioutil.ReadFile(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, hash)))
-	}
-	if err != nil {
-		return err //FIXME: handle block doesn't exist by asking peer
-	}
-	bBytes, err := helpers.Decode64(string(read))
-	if err != nil {
-		return err
-	}
-	temp := &Block{}
-	err = json.Unmarshal(bBytes, &temp)
-	if err != nil {
-		return err
-	}
-	b.setHeader(temp.GetHeader())
-	b.setHeight(temp.GetHeight())
-	b.setNodes(temp.GetNodes())
-	b.setBy(temp.GetBy())
-	return nil
-}
-
-//returns the file stats of a blockfile
-func (b Block) fileStats() os.FileInfo {
-	var info os.FileInfo
-	var err error
-	if os.Getenv("ENV") == "dev" {
-		info, err = os.Stat(path.Join(BlockPathDev, fmt.Sprintf(BlockFile, b.Header.GetHash())))
-	} else {
-		info, err = os.Stat(path.Join(BlockPathProd, fmt.Sprintf(BlockFile, b.Header.GetHash())))
-	}
-	if os.IsNotExist(err) {
-		helpers.Logger().Fatal("Core: block file doesn't exist, blocks folder corrupted")
-	}
-	return info
-}
-
-//IsEmpty returns true is block is empty
-func (b *Block) IsEmpty() bool {
-	return b.Header.GetHash() == ""
-}
-
-//VerifyBlock verifies a block
-func (b *Block) VerifyBlock() (bool, error) {
-	pow := NewPOW(b)
-	return pow.Validate()
-}
-
-//DeleteFile deletes block file on disk
-func (b Block) DeleteFile() error {
-	var err error
-	if os.Getenv("ENV") == "dev" {
-		err = os.Remove(path.Join(BlockPathDev, b.fileStats().Name()))
-	} else {
-		err = os.Remove(path.Join(BlockPathProd, b.fileStats().Name()))
-	}
-	if err != nil {
-		return err
-	}
-	return nil
 }

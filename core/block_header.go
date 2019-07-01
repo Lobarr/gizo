@@ -13,61 +13,61 @@ type BlockHeader struct {
 }
 
 //GetTimestamp returns timestamp
-func (bh BlockHeader) GetTimestamp() int64 {
-	return bh.Timestamp
+func (blockHeader BlockHeader) GetTimestamp() int64 {
+	return blockHeader.Timestamp
 }
 
 //sets the timestamp
-func (bh *BlockHeader) setTimestamp(t int64) {
-	bh.Timestamp = t
+func (blockHeader *BlockHeader) setTimestamp(t int64) {
+	blockHeader.Timestamp = t
 }
 
 //GetPrevBlockHash returns previous block hash
-func (bh BlockHeader) GetPrevBlockHash() string {
-	return bh.PrevBlockHash
+func (blockHeader BlockHeader) GetPrevBlockHash() string {
+	return blockHeader.PrevBlockHash
 }
 
 //sets prevblockhash
-func (bh *BlockHeader) setPrevBlockHash(h string) {
-	bh.PrevBlockHash = h
+func (blockHeader *BlockHeader) setPrevBlockHash(h string) {
+	blockHeader.PrevBlockHash = h
 }
 
 //GetMerkleRoot returns merkleroot
-func (bh BlockHeader) GetMerkleRoot() string {
-	return bh.MerkleRoot
+func (blockHeader BlockHeader) GetMerkleRoot() string {
+	return blockHeader.MerkleRoot
 }
 
 //sets merkleroot
-func (bh *BlockHeader) setMerkleRoot(mr string) {
-	bh.MerkleRoot = mr
+func (blockHeader *BlockHeader) setMerkleRoot(merkleRoot string) {
+	blockHeader.MerkleRoot = merkleRoot
 }
 
 //GetNonce returns the nonce
-func (bh BlockHeader) GetNonce() uint64 {
-	return bh.Nonce
+func (blockHeader BlockHeader) GetNonce() uint64 {
+	return blockHeader.Nonce
 }
 
 //sets the nonce
-func (bh *BlockHeader) setNonce(n uint64) {
-	bh.Nonce = n
+func (blockHeader *BlockHeader) setNonce(nonce uint64) {
+	blockHeader.Nonce = nonce
 }
 
 //GetDifficulty returns difficulty
-func (bh BlockHeader) GetDifficulty() *big.Int {
-	return bh.Difficulty
+func (blockHeader BlockHeader) GetDifficulty() *big.Int {
+	return blockHeader.Difficulty
 }
 
 //sets the difficulty
-func (bh *BlockHeader) setDifficulty(d big.Int) {
-	bh.Difficulty = &d
+func (blockHeader *BlockHeader) setDifficulty(d big.Int) {
+	blockHeader.Difficulty = &d
 }
 
 //GetHash returns hash
-func (bh BlockHeader) GetHash() string {
-	return bh.Hash
+func (blockHeader BlockHeader) GetHash() string {
+	return blockHeader.Hash
 }
 
 //sets hash
-func (bh *BlockHeader) setHash(h string) {
-	bh.Hash = h
+func (blockHeader *BlockHeader) setHash(h string) {
+	blockHeader.Hash = h
 }

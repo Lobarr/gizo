@@ -1,6 +1,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/gizo-network/gizo/core/merkletree"
 	"github.com/gizo-network/gizo/job"
 )
@@ -24,4 +26,37 @@ type IBlockChain interface {
 	GetBlockHashes() ([]string, error)
 	GetBlockHashesHex() ([]string, error)
 	InitGenesisBlock(string) error
+}
+
+// IBlockHeader interface for blockheader
+type IBlockHeader interface {
+	GetTimestamp() int64
+	GetPrevBlockHash() string
+	GetMerkleRoot() string
+	GetNonce() uint64
+	GetDifficulty() *big.Int
+	GetHash() string
+}
+
+//IBlock interface for block
+type IBlock interface {
+	GetHeader() IBlockHeader
+	GetNodes() []merkletree.IMerkleNode
+	GetHeight() uint64
+	GetBy() string
+	Export() error
+	Import(string) error
+	IsEmpty() bool
+	DeleteFile() error
+}
+
+//IBlockIterator interface for blockiterator
+type IBlockIterator interface {
+	GetCurrent() []byte
+	Next() (IBlock, error)
+	NextBlockinfo() (IBlockInfo, error)
+}
+
+//IBlockInfo interface for blockinfo
+type IBlockInfo interface {
 }

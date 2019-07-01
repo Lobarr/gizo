@@ -29,7 +29,7 @@ type IJob interface {
 	GetSignature() string
 	AddExec(IExec)
 	GetTask() (string, error)
-	Execute(exec IExec, passphrase string) IExec
+	Execute(IExec, string) IExec
 }
 
 //IExec interface for exec

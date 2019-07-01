@@ -10,7 +10,7 @@ import (
 //BlockChainIterator - a way to loop through the blockchain (from newest block to oldest block)
 type BlockChainIterator struct {
 	current []byte
-	db      *bolt.DB
+	db      IBolt
 }
 
 //sets current block
@@ -24,7 +24,7 @@ func (i BlockChainIterator) GetCurrent() []byte {
 }
 
 // Next returns the next block in the blockchain
-func (i *BlockChainIterator) Next() (*Block, error) {
+func (i *BlockChainIterator) Next() (IBlock, error) {
 	var block *Block
 	err := i.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
@@ -46,7 +46,7 @@ func (i *BlockChainIterator) Next() (*Block, error) {
 }
 
 // NextBlockinfo returns the next blockinfo in the blockchain - more lightweight
-func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
+func (i *BlockChainIterator) NextBlockinfo() (IBlockInfo, error) {
 	var block *BlockInfo
 	err := i.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(BlockBucket))
@@ -68,4 +68,12 @@ func (i *BlockChainIterator) NextBlockinfo() (*BlockInfo, error) {
 	}
 	i.setCurrent(current)
 	return block, nil
+}
+
+//NewBlockchainIterator create new blockchain iterator
+func NewBlockchainIterator(blockTip []byte, boltDB IBolt) IBlockIterator {
+	return &BlockChainIterator{
+		current: blockTip,
+		db: boltDB
+	}
 }

@@ -231,7 +231,7 @@ func (e *Exec) SetHash() error {
 		return err
 	}
 
-	pub, err := hex.DecodeString(e.getPub())
+	pub, err := hex.DecodeString(e.GetPub())
 	if err != nil {
 		return err
 	}

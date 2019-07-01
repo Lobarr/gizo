@@ -20,109 +20,109 @@ type MerkleNode struct {
 }
 
 // GetHash returns hash
-func (n MerkleNode) GetHash() string {
-	return n.Hash
+func (merkleNode MerkleNode) GetHash() string {
+	return merkleNode.Hash
 }
 
 // generates hash value of merklenode
-func (n *MerkleNode) setHash() error {
-	leftNode, err := json.Marshal(n.Left)
+func (merkleNode *MerkleNode) setHash() error {
+	leftNode, err := json.Marshal(merkleNode.Left)
 	if err != nil {
 		return err
 	}
-	rightNode, err := json.Marshal(n.Right)
+	rightNode, err := json.Marshal(merkleNode.Right)
 	if err != nil {
 		return err
 	}
-	jobBytes, err := json.Marshal(n.Job)
+	jobBytes, err := json.Marshal(merkleNode.Job)
 	if err != nil {
 		return err
 	}
 	headers := bytes.Join([][]byte{leftNode, rightNode, jobBytes}, []byte{})
 	hash := sha256.Sum256(headers)
-	n.Hash = hex.EncodeToString(hash[:])
+	merkleNode.Hash = hex.EncodeToString(hash[:])
 	return nil
 }
 
 // GetJob returns job
-func (n MerkleNode) GetJob() job.IJob {
-	return n.Job
+func (merkleNode MerkleNode) GetJob() job.IJob {
+	return merkleNode.Job
 }
 
 // SetJob setter for job
-func (n *MerkleNode) SetJob(j job.IJob) {
-	n.Job = j
+func (merkleNode *MerkleNode) SetJob(j job.IJob) {
+	merkleNode.Job = j
 }
 
 // GetLeftNode return leftnode
-func (n MerkleNode) GetLeftNode() IMerkleNode {
-	return n.Left
+func (merkleNode MerkleNode) GetLeftNode() IMerkleNode {
+	return merkleNode.Left
 }
 
 // SetLeftNode setter for leftnode
-func (n *MerkleNode) SetLeftNode(l IMerkleNode) {
-	n.Left = l
+func (merkleNode *MerkleNode) SetLeftNode(leftNode IMerkleNode) {
+	merkleNode.Left = leftNode
 }
 
 // GetRightNode return rightnode
-func (n MerkleNode) GetRightNode() IMerkleNode {
-	return n.Right
+func (merkleNode MerkleNode) GetRightNode() IMerkleNode {
+	return merkleNode.Right
 }
 
 //SetRightNode setter for rightnode
-func (n *MerkleNode) SetRightNode(r MerkleNode) {
-	n.Right = &r
+func (merkleNode *MerkleNode) SetRightNode(rightNode IMerkleNode) {
+	merkleNode.Right = rightNode
 }
 
 //IsLeaf checks if the merklenode is a leaf node
-func (n *MerkleNode) IsLeaf() bool {
-	return n.Left == nil && n.Right == nil
+func (merkleNode *MerkleNode) IsLeaf() bool {
+	return merkleNode.Left == nil && merkleNode.Right == nil
 }
 
 //IsEmpty check if the merklenode is empty
-func (n *MerkleNode) IsEmpty() (bool, error) {
-	empty, err := n.GetJob().IsEmpty()
+func (merkleNode *MerkleNode) IsEmpty() (bool, error) {
+	empty, err := merkleNode.GetJob().IsEmpty()
 	if err != nil {
 		return false, err
 	}
-	return n.Right == nil && n.Left == nil && empty && n.GetHash() == "", nil
+	return merkleNode.Right == nil && merkleNode.Left == nil && empty && merkleNode.GetHash() == "", nil
 }
 
 //IsEqual check if the input merklenode equals the merklenode calling the function
-func (n MerkleNode) IsEqual(x MerkleNode) (bool, error) {
-	nBytes, err := json.Marshal(n)
+func (merkleNode MerkleNode) IsEqual(compareMerkleNode IMerkleNode) (bool, error) {
+	merkleNodeBytes, err := json.Marshal(merkleNode)
 	if err != nil {
 		return false, err
 	}
-	xBytes, err := json.Marshal(x)
+	compareMerkleNodeBytes, err := json.Marshal(compareMerkleNode)
 	if err != nil {
 		return false, err
 	}
-	return bytes.Equal(nBytes, xBytes), nil
+	return bytes.Equal(merkleNodeBytes, compareMerkleNodeBytes), nil
 }
 
 //NewNode returns a new merklenode
-func NewNode(j job.Job, lNode, rNode *MerkleNode) (*MerkleNode, error) {
-	n := &MerkleNode{
-		Left:  lNode,
-		Right: rNode,
-		Job:   j,
+func NewNode(job job.IJob, leftNode, rightNode IMerkleNode) (IMerkleNode, error) {
+	merkleNode := &MerkleNode{
+		Left:  leftNode,
+		Right: rightNode,
+		Job:   job,
 	}
-	err := n.setHash()
-	return n, err
+	err := merkleNode.setHash()
+	return merkleNode, err
 }
 
 //MergeJobs merges two jobs into one
-func MergeJobs(x, y IMerkleNode) (job.Job, error) {
+func MergeJobs(x, y IMerkleNode) (job.IJob, error) {
 	xTask, err := x.GetJob().GetTask()
 	if err != nil {
-		return job.Job{}, err
+		return nil, err
 	}
 	yTask, err := y.GetJob().GetTask()
 	if err != nil {
-		return job.Job{}, err
+		return nil, err
 	}
-	return job.Job{
+	return &job.Job{
 		ID:        x.GetJob().GetID() + y.GetJob().GetID(),
 		Hash:      x.GetJob().GetHash() + y.GetJob().GetHash(),
 		Execs:     append(x.GetJob().GetExecs(), y.GetJob().GetExecs()...),

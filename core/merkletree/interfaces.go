@@ -6,11 +6,22 @@ import "github.com/gizo-network/gizo/job"
 type IMerkleNode interface {
 	GetHash() string
 	GetJob() job.IJob
-	SetJob(j job.IJob)
+	SetJob(job.IJob)
 	GetLeftNode() IMerkleNode
 	SetLeftNode(IMerkleNode)
 	GetRightNode() IMerkleNode
-	SetRightNode(MerkleNode)
+	SetRightNode(IMerkleNode)
 	IsLeaf() bool
 	IsEmpty() (bool, error)
+}
+
+// IMerkleTree interface for merkletree
+type IMerkleTree interface {
+	GetRoot() string
+	GetLeafNodes() []IMerkleNode
+	SetLeafNodes([]IMerkleNode)
+	Build() error
+	VerifyTree() bool
+	SearchNode(string) (IMerkleNode, error)
+	SearchJob(string) (job.IJob, error)
 }
