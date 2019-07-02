@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/asdine/storm"
+	"github.com/thoas/go-funk"
 
 	"github.com/gizo-network/gizo/helpers"
 
@@ -27,7 +28,7 @@ var (
 //BlockChain - singly linked list of blocks
 type BlockChain struct {
 	tip    []byte //! hash of latest block in the blockchain
-	db     IStorm
+	db     storm.Node
 	mu     *sync.RWMutex
 	logger helpers.ILogger
 }
@@ -129,12 +130,12 @@ func (bc *BlockChain) InitGenesisBlock(nodeID string) error {
 }
 
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain
-func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, db storm.TypeStore) *BlockChain {
+func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, db storm.Node) *BlockChain {
 	var logger helpers.ILogger
 	var dbFile string
 	var tip []byte
 	var err error
-	var db storm.TypeStore
+	var db storm.Node
 
 	if loggerArg == nil {
 		logger = helpers.Logger()
@@ -152,19 +153,21 @@ func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, db storm.TypeSto
 	// InitializeDataPath()
 
 	if helpers.FileExists(dbFile) {
-		db, err = storm.Open(dbFile, storm.BoltOptions(0600, &bolt.Options{Timeout: time.Second * 2}))
+		db, err = storm.Open(dbFile, storm.BoltOptions(0600, &bolt.Options{Timeout: time.Second * 2})) //TODO: handle closing db
 		if err != nil {
 			logger.Fatal(err)
 		}
 
-		err = db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(BlockBucket))
-			tip = b.Get([]byte("l"))
-			return nil
-		})
-		if err != nil {
-			logger.Fatal(err)
-		}
+		db.Get()
+
+		// err = db.View(func(tx *bolt.Tx) error {
+		// 	b := tx.Bucket([]byte(BlockBucket))
+		// 	tip = b.Get([]byte("l"))
+		// 	return nil
+		// })
+		// if err != nil {
+		// 	logger.Fatal(err)
+		// }
 		return &BlockChain{
 			tip:    tip,
 			db:     db,

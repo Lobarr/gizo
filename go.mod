@@ -9,7 +9,7 @@ require (
 	github.com/abiosoft/ishell v2.0.0+incompatible // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db // indirect
 	github.com/allegro/bigcache v1.1.0
-	github.com/asdine/storm v2.1.2+incompatible // indirect
+	github.com/asdine/storm v2.1.2+incompatible
 	github.com/boltdb/bolt v1.3.1
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1 // indirect

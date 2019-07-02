@@ -1,7 +1,6 @@
 package core
 
 import (
-	"github.com/asdine/storm"
 	"math/big"
 
 	"github.com/gizo-network/gizo/core/merkletree"
@@ -62,10 +61,6 @@ type IBlockIterator interface {
 type IBlockInfo interface {
 }
 
-type IStorm interface {
-	...storm.Node
-	...storm.KeyValueStore
-	...storm.Query
-	...storm.TypeStore
-	...storm.Finder
-}
+// type IStorm interface {
+// 	...storm.Node
+// }
