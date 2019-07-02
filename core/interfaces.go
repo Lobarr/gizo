@@ -63,9 +63,9 @@ type IBlockInfo interface {
 }
 
 type IStorm interface {
+	...storm.Node
 	...storm.KeyValueStore
 	...storm.Query
 	...storm.TypeStore
-	...storm.Node
 	...storm.Finder
 }
