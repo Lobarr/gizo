@@ -43,7 +43,7 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.1 // indirect
 	github.com/stretchr/testify v1.2.2
-	github.com/thoas/go-funk v0.0.0-20170604141201-14304e8530de
+	github.com/thoas/go-funk v0.4.0
 	github.com/ugorji/go v1.1.1 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
 	golang.org/x/crypto v0.0.0-20180621125126-a49355c7e3f8 // indirect

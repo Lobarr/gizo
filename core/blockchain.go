@@ -130,7 +130,7 @@ func (bc *BlockChain) InitGenesisBlock(nodeID string) error {
 }
 
 //CreateBlockChain initializes a db, set's the tip to GenesisBlock and returns the blockchain
-func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, db storm.Node) *BlockChain {
+func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, dbArg storm.Node) IBlockChain {
 	var logger helpers.ILogger
 	var dbFile string
 	var tip []byte
@@ -144,54 +144,39 @@ func CreateBlockChain(nodeID string, loggerArg helpers.ILogger, db storm.Node) *
 	}
 
 	if os.Getenv("ENV") == "dev" {
-		dbFile = path.Join(IndexPathDev, fmt.Sprintf(IndexDB, nodeID[len(nodeID)/2:])) //half the length of the node id
+		dbFile = path.Join(IndexPathDev, fmt.Sprintf(IndexDB, nodeID))
 	} else {
-		dbFile = path.Join(IndexPathProd, fmt.Sprintf(IndexDB, nodeID[len(nodeID)/2:])) //half the length of the node id
+		dbFile = path.Join(IndexPathProd, fmt.Sprintf(IndexDB, nodeID))
 	}
-
-	// logger.Log("Core: Creating blockchain database")
-	// InitializeDataPath()
 
 	if helpers.FileExists(dbFile) {
 		db, err = storm.Open(dbFile, storm.BoltOptions(0600, &bolt.Options{Timeout: time.Second * 2})) //TODO: handle closing db
 		if err != nil {
 			logger.Fatal(err)
 		}
-
-		db.Get()
-
-		// err = db.View(func(tx *bolt.Tx) error {
-		// 	b := tx.Bucket([]byte(BlockBucket))
-		// 	tip = b.Get([]byte("l"))
-		// 	return nil
-		// })
-		// if err != nil {
-		// 	logger.Fatal(err)
-		// }
-		return &BlockChain{
-			tip:    tip,
-			db:     db,
-			mu:     &sync.RWMutex{},
-			logger: helpers.Logger(),
-		}
-	}
-
-	db, err := bolt.Open(dbFile, 0600, &bolt.Options{Timeout: time.Second * 2})
-	if err != nil {
-		logger.Fatal(err)
-	}
-	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucket([]byte(BlockBucket))
+		err = db.Node.Get("config", "latestHash", &tip)
 		if err != nil {
 			logger.Fatal(err)
 		}
-		return nil
-	})
-	bc := &BlockChain{
-		tip:    nil,
+	} else {
+		db, err = storm.Open(dbFile, storm.BoltOptions(0600, &bolt.Options{Timeout: time.Second * 2}))
+		if err != nil {
+			logger.Fatal(err)
+		}
+		db.Bolt.Update(func(tx *bolt.Tx) error {
+			_, err := tx.CreateBucket([]byte(BlockBucket))
+			if err != nil {
+				logger.Fatal(err)
+			}
+			return
+		})
+	}
+
+	logger.Debug("Core: Creating blockchain database")
+	return &BlockChain{
+		tip:    tip,
 		db:     db,
 		mu:     &sync.RWMutex{},
 		logger: logger,
 	}
-	return bc
 }

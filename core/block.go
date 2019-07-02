@@ -23,7 +23,7 @@ var (
 
 //Block - the foundation of blockchain
 type Block struct {
-	Header     IBlockHeader
+	Header     IBlockHeader `storm:"index`
 	Jobs       []merkletree.IMerkleNode
 	Height     uint64 `storm:"id"`
 	ReceivedAt int64  `storm:"index"` //time it was received

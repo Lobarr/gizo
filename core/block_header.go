@@ -4,12 +4,12 @@ import "math/big"
 
 //BlockHeader holds the header of the block
 type BlockHeader struct {
-	Timestamp     int64
-	PrevBlockHash string
-	MerkleRoot    string // hash of merkle root
+	Timestamp     int64  `storm:"index"`
+	PrevBlockHash string ``
+	MerkleRoot    string `storm:"index"` // hash of merkle root
 	Nonce         uint64
 	Difficulty    *big.Int
-	Hash          string
+	Hash          string `storm:"index"`
 }
 
 //GetTimestamp returns timestamp
